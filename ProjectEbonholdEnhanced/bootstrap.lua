@@ -12,6 +12,8 @@ local PANEL_WIDTH = 360
 local PANEL_HEIGHT = 188
 local PANEL_EDGE_SIZE = 4
 local PANEL_INSET = 14
+local STATUS_PANEL_AUTO_HIDE_DELAY = 3
+local STATUS_PANEL_FADE_DURATION = 0.35
 local MAGE_BLUE = {0.247, 0.78, 0.922}
 local HOVER_BLUE = {0.16, 0.88, 1.0}
 local CREAM = {1, 0.92, 0.82}
@@ -809,6 +811,40 @@ local function UpdateStatusPanel()
 
 end
 
+local function ResetStatusPanelFade(panel)
+    if not panel then
+        return
+    end
+
+    panel._peeStatusFadeElapsed = 0
+    panel._peeStatusDragging = false
+    if panel.SetAlpha then
+        panel:SetAlpha(1)
+    end
+end
+
+local function UpdateStatusPanelFade(panel, elapsed)
+    if not panel or panel._peeStatusDragging or not panel:IsShown() then
+        return
+    end
+
+    panel._peeStatusFadeElapsed = (panel._peeStatusFadeElapsed or 0) + (elapsed or 0)
+    if panel._peeStatusFadeElapsed <= STATUS_PANEL_AUTO_HIDE_DELAY then
+        return
+    end
+
+    local fadeElapsed = panel._peeStatusFadeElapsed - STATUS_PANEL_AUTO_HIDE_DELAY
+    local alpha = 1 - math.min(1, fadeElapsed / STATUS_PANEL_FADE_DURATION)
+    if panel.SetAlpha then
+        panel:SetAlpha(alpha)
+    end
+
+    if alpha <= 0 then
+        panel:Hide()
+        ResetStatusPanelFade(panel)
+    end
+end
+
 local function CreateStatusPanel()
     if overlay.statusPanel then
         return overlay.statusPanel
@@ -825,12 +861,18 @@ local function CreateStatusPanel()
     end
     panel:RegisterForDrag("LeftButton")
     panel:SetScript("OnDragStart", function(self)
+        self._peeStatusDragging = true
+        if self.SetAlpha then
+            self:SetAlpha(1)
+        end
         self:StartMoving()
     end)
     panel:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         SavePanelPosition(self)
+        ResetStatusPanelFade(self)
     end)
+    panel:SetScript("OnUpdate", UpdateStatusPanelFade)
     panel:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -889,6 +931,7 @@ local function ShowStatusPanel()
 
     local panel = CreateStatusPanel()
     UpdateStatusPanel()
+    ResetStatusPanelFade(panel)
     panel:Show()
 end
 
@@ -906,6 +949,7 @@ local function ToggleStatusPanel()
     if panel:IsShown() then
         panel:Hide()
     else
+        ResetStatusPanelFade(panel)
         panel:Show()
     end
 end
