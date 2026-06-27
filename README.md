@@ -6,7 +6,7 @@ UI enhancements for Project Ebonhold. Install this addon alongside the server
 client and disable it any time you want the server UI to take over.
 
 [![Downloads](https://img.shields.io/github/downloads/disarrayed/ProjectEbonholdEnhanced/total?style=for-the-badge&label=Downloads&color=3FC7EB)](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases)
-![Project Ebonhold Enhanced 0.1.61](https://img.shields.io/badge/Project%20Ebonhold%20Enhanced-0.1.61-3FC7EB.svg?style=for-the-badge)
+![Project Ebonhold Enhanced 0.1.62](https://img.shields.io/badge/Project%20Ebonhold%20Enhanced-0.1.62-3FC7EB.svg?style=for-the-badge)
 ![Project Ebonhold 3.3.5a](https://img.shields.io/badge/Project%20Ebonhold-3.3.5a-3FC7EB.svg?style=for-the-badge)
 
 [**Download**](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases/latest) | [**Source**](https://github.com/disarrayed/ProjectEbonholdEnhanced)
@@ -70,6 +70,10 @@ Theme and behavior settings live in the normal Interface Options panel.
 - Project Ebonhold Enhanced stores its own settings and positions.
 - Server-owned talents, action bars, PTR behavior, and gameplay systems stay
   with the server addon.
+- Server visual theme controls are ignored while Enhanced is enabled. Turning
+  off the server Transparent design option prompts you to disable Enhanced.
+- Soul Ashe Tree search supports `missing` for unlearned nodes and `perm` or
+  `permanent` for permanent nodes.
 - Release zips contain only the addon folder and player-facing release files.
 
 ---

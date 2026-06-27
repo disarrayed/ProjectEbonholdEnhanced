@@ -2,12 +2,13 @@
 ## Title: Project Ebonhold Enhanced
 ## Notes: Overlay addon for Project Ebonhold
 ## Author: disarrayed
-## Version: 0.1.61
+## Version: 0.1.62
 ## RequiredDeps: ProjectEbonhold
 ## SavedVariables: ProjectEbonholdEnhancedDB
 ## SavedVariablesPerCharacter: ProjectEbonholdEnhancedCharDB
 
 bootstrap.lua
+modules/server_option_guard.lua
 modules/affix_book.lua
 modules/perk_extras.lua
 modules/player_run_extras.lua

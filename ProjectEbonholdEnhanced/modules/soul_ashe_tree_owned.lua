@@ -16,6 +16,9 @@ local refreshAccessibility
 local updateTalentPoints
 local ShowChoiceButtons
 local HideChoiceButtons
+local NextRankTooltip
+local CurrentRankTooltip
+local InfoTooltip
 
 local function CountTableEntries(tableValue)
     local count = 0
@@ -363,6 +366,175 @@ local function GetAsheProgressSimulationValue()
     return current, cap, ratio
 end
 
+Chrome.PERMANENT_ECHO_SLOT_ROMANS = Chrome.PERMANENT_ECHO_SLOT_ROMANS or { "I", "II", "III", "IV", "V" }
+Chrome.PERMANENT_ECHO_QUALITY = Chrome.PERMANENT_ECHO_QUALITY or {
+    [-1] = { name = "Unknown", color = {0.62, 0.62, 0.62} },
+    [0] = { name = "Common", color = {1, 1, 1} },
+    [1] = { name = "Uncommon", color = {0.1, 1, 0.1} },
+    [2] = { name = "Rare", color = {0, 0.44, 0.87} },
+    [3] = { name = "Epic", color = {0.64, 0.21, 0.93} },
+    [4] = { name = "Legendary", color = {1, 0.5, 0} },
+}
+
+function Chrome.FormatOwnedSoulAshValue(value)
+    value = tonumber(value) or 0
+    if value >= 1000000 then
+        local millions = value / 1000000
+        if millions == math.floor(millions) then
+            return tostring(millions) .. "M"
+        end
+        return string.format("%.1fM", millions)
+    end
+    if value >= 1000 then
+        local thousands = value / 1000
+        if thousands == math.floor(thousands) then
+            return tostring(thousands) .. "K"
+        end
+        return string.format("%.1fK", thousands)
+    end
+    return tostring(value)
+end
+
+function Chrome.GetOwnedPermanentEchoSlotMilestones()
+    local serverAddon = _G and _G.ProjectEbonhold
+    local milestoneData = serverAddon and serverAddon.SoulAshesMilestones
+    local milestones = {}
+    if not milestoneData or #milestoneData == 0 then
+        return milestones
+    end
+
+    milestones[1] = { index = 1, soulAshes = 0 }
+    for _, data in ipairs(milestoneData) do
+        local soulAshes
+        local spellId
+        if type(data) == "table" then
+            soulAshes = tonumber(data.soulAshes)
+            spellId = tonumber(data.spellID or data.spellId)
+        else
+            soulAshes = tonumber(data)
+        end
+        if soulAshes then
+            milestones[#milestones + 1] = { index = 0, soulAshes = soulAshes, spellId = spellId }
+        end
+    end
+
+    table.sort(milestones, function(left, right)
+        return (left.soulAshes or 0) < (right.soulAshes or 0)
+    end)
+    for index, milestone in ipairs(milestones) do
+        milestone.index = index
+    end
+    return milestones
+end
+
+function Chrome.GetOwnedPermanentEchoUnlockedSlotCount(currentTotal)
+    local unlockedSlots = 0
+    for _, milestone in ipairs(Chrome.GetOwnedPermanentEchoSlotMilestones()) do
+        if (tonumber(currentTotal) or 0) >= (milestone.soulAshes or 0) then
+            unlockedSlots = unlockedSlots + 1
+        end
+    end
+
+    local perkService = _G and _G.ProjectEbonhold and _G.ProjectEbonhold.PerkService
+    local serverSlotCount = perkService and perkService.GetMaximumPermanentEchoes and
+        tonumber(perkService.GetMaximumPermanentEchoes())
+    if serverSlotCount and serverSlotCount > unlockedSlots then
+        unlockedSlots = serverSlotCount
+    end
+    return unlockedSlots
+end
+
+function Chrome.GetOwnedLockedPerkList()
+    local perkService = _G and _G.ProjectEbonhold and _G.ProjectEbonhold.PerkService
+    local lockedPerks = perkService and perkService.GetLockedPerks and perkService.GetLockedPerks() or {}
+    local list = {}
+
+    for key, perkData in pairs(lockedPerks) do
+        if type(perkData) == "table" then
+            local spellId = tonumber(perkData.spellId or perkData.spellID or key)
+            if spellId then
+                local spellName = perkData.name or perkData.spellName or (_G.GetSpellInfo and _G.GetSpellInfo(spellId))
+                list[#list + 1] = {
+                    spellId = spellId,
+                    quality = tonumber(perkData.quality) or -1,
+                    count = tonumber(perkData.count or perkData.stack or perkData.stacks) or 1,
+                    name = spellName or ("Spell " .. tostring(spellId)),
+                }
+            end
+        end
+    end
+
+    table.sort(list, function(left, right)
+        if (left.quality or -1) ~= (right.quality or -1) then
+            return (left.quality or -1) > (right.quality or -1)
+        end
+        if (left.name or "") ~= (right.name or "") then
+            return (left.name or "") < (right.name or "")
+        end
+        return (left.spellId or 0) < (right.spellId or 0)
+    end)
+    return list
+end
+
+function Chrome.GetOwnedSpellNameAndIcon(spellId)
+    if not spellId then
+        return "Permanent Echo Slot", "Interface\\Icons\\INV_Misc_QuestionMark"
+    end
+    local spellName, _, spellIcon = _G.GetSpellInfo and _G.GetSpellInfo(spellId)
+    return spellName or ("Spell " .. tostring(spellId)), spellIcon or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+
+function Chrome.GetOwnedEchoQuality(quality)
+    if quality == nil then
+        quality = -1
+    end
+    return Chrome.PERMANENT_ECHO_QUALITY[quality] or Chrome.PERMANENT_ECHO_QUALITY[-1]
+end
+
+function Chrome.GetOwnedEchoDescription(spellId, count)
+    local spellUtils = _G and _G.utils
+    if spellUtils and spellUtils.GetSpellDescription and spellId then
+        local ok, description = pcall(spellUtils.GetSpellDescription, spellId, 500, count or 1)
+        if ok then
+            return description
+        end
+    end
+    return nil
+end
+
+function Chrome.HideOwnedTooltip()
+    if InfoTooltip and InfoTooltip.Hide then
+        InfoTooltip:Hide()
+    end
+    if _G.GameTooltip and _G.GameTooltip.Hide then
+        _G.GameTooltip:Hide()
+    end
+end
+
+function Chrome.ProxyOwnedSkillTreeDragStart()
+    if not peeOwnedSkillTreeFrame then
+        return
+    end
+    local dragStart = peeOwnedSkillTreeFrame.GetScript and peeOwnedSkillTreeFrame:GetScript("OnDragStart")
+    if dragStart then
+        dragStart(peeOwnedSkillTreeFrame)
+    elseif peeOwnedSkillTreeFrame.StartMoving then
+        peeOwnedSkillTreeFrame:StartMoving()
+    end
+end
+
+function Chrome.ProxyOwnedSkillTreeDragStop()
+    if not peeOwnedSkillTreeFrame then
+        return
+    end
+    local dragStop = peeOwnedSkillTreeFrame.GetScript and peeOwnedSkillTreeFrame:GetScript("OnDragStop")
+    if dragStop then
+        dragStop(peeOwnedSkillTreeFrame)
+    elseif peeOwnedSkillTreeFrame.StopMovingOrSizing then
+        peeOwnedSkillTreeFrame:StopMovingOrSizing()
+    end
+end
+
 local PopulateSearchResults
 local HideSearchResults
 
@@ -378,9 +550,10 @@ local function FilterTreeNodes(searchText)
     local lowerSearch = string.lower(searchText or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local isEmpty = (lowerSearch == "")
     local searchMissingNodes = (lowerSearch == "missing")
+    local searchPermanentNodes = (lowerSearch == "perm" or lowerSearch == "permanent")
 
     local terms = {}
-    if not isEmpty and not searchMissingNodes then
+    if not isEmpty and not searchMissingNodes and not searchPermanentNodes then
         terms[#terms + 1] = lowerSearch
         if TREE_SEARCH_ALIASES[lowerSearch] then
             for _, alias in ipairs(TREE_SEARCH_ALIASES[lowerSearch]) do
@@ -398,6 +571,8 @@ local function FilterTreeNodes(searchText)
             local matches = false
             if searchMissingNodes then
                 matches = (nodeRanks[btn.id] or 0) == 0
+            elseif searchPermanentNodes then
+                matches = btn.permanent and true or false
             elseif btn.spells then
                 for _, spellId in ipairs(btn.spells) do
                     local name = GetSpellInfo(spellId)
@@ -901,9 +1076,9 @@ function isStartingNode(nodeId)
     return false
 end
 
-local NextRankTooltip = nil
-local CurrentRankTooltip = nil
-local InfoTooltip = nil
+NextRankTooltip = nil
+CurrentRankTooltip = nil
+InfoTooltip = nil
 
 
 local function SendCreateLoadoutToServer(name, nodeRanks)
@@ -1560,12 +1735,22 @@ resizeTex:SetTexture("Interface\\AddOns\\ProjectEbonholdEnhanced\\assets\\resize
 resizeTex:SetVertexColor(1, 0.62, 0, 1)
 resizeHandle:SetScript("OnEnter", function(self)
     resizeTex:SetVertexColor(1, 0.82, 0, 1)
+    local tooltip = InfoTooltip or _G.GameTooltip
+    if tooltip then
+        if tooltip.ClearLines then tooltip:ClearLines() end
+        tooltip:SetOwner(self, "ANCHOR_TOP")
+        tooltip:SetText("Resize Soul Ashe Tree", 1, 0.82, 0)
+        tooltip:AddLine("Drag this corner to resize the tree window.", 0.8, 0.8, 0.8, true)
+        tooltip:Show()
+    end
 end)
 resizeHandle:SetScript("OnLeave", function(self)
     resizeTex:SetVertexColor(1, 0.62, 0, 1)
+    Chrome.HideOwnedTooltip()
 end)
 resizeHandle:SetScript("OnMouseDown", function(self)
     resizeTex:SetVertexColor(1, 0.82, 0, 1)
+    Chrome.HideOwnedTooltip()
     local scrollFrame = _G.peeOwnedSkillTreeScroll
     if scrollFrame then scrollFrame:Hide() end
     local srf = _G.peeOwnedSkillTreeSearchResults
@@ -1780,6 +1965,146 @@ function Chrome.UpdateOwnedProgressDecor(progressBox, width, fillWidth, ratio)
     end
 end
 
+function Chrome.ShowOwnedProgressTooltip(owner)
+    local tooltip = InfoTooltip or _G.GameTooltip
+    if not tooltip then
+        return
+    end
+    if tooltip.ClearLines then
+        tooltip:ClearLines()
+    end
+
+    local current, target, progressText = Chrome.OwnedProgressValues()
+    local milestones = Chrome.GetOwnedPermanentEchoSlotMilestones()
+    local unlockedSlots = Chrome.GetOwnedPermanentEchoUnlockedSlotCount(current or 0)
+
+    tooltip:SetOwner(owner, "ANCHOR_TOP")
+    tooltip:SetText("Soul Ashes Progression", 1, 0.82, 0)
+    tooltip:AddLine("Progress: " .. tostring(progressText or "No milestone data"), 1, 1, 1)
+    if target and target > 0 then
+        tooltip:AddLine("Next milestone: " .. Chrome.FormatOwnedSoulAshValue(target) .. " Soul Ashes", 0.8, 0.8, 0.8, true)
+    end
+    if #milestones > 0 then
+        tooltip:AddLine("Permanent Echo slots: " .. tostring(unlockedSlots) .. "/" .. tostring(#milestones), 0.4, 0.8, 1.0, true)
+    end
+    tooltip:AddLine("Earn Soul Ashes to unlock permanent Echo slots and raise your progression cap.", 0.8, 0.8, 0.8, true)
+    tooltip:Show()
+end
+
+function Chrome.ShowOwnedLockedEchoSlotTooltip(button)
+    local slotData = button and button._peeOwnedEchoSlotData
+    local tooltip = InfoTooltip or GameTooltip
+    if not slotData or not tooltip then
+        return
+    end
+    if tooltip.ClearLines then
+        tooltip:ClearLines()
+    end
+
+    local roman = Chrome.PERMANENT_ECHO_SLOT_ROMANS[slotData.index] or tostring(slotData.index)
+    tooltip:SetOwner(button, "ANCHOR_TOP")
+    tooltip:SetText("Permanent Echo Slot " .. roman, 1, 0.82, 0)
+
+    if slotData.unlocked then
+        tooltip:AddLine("Unlocked", 0.1, 1, 0.1, true)
+    else
+        tooltip:AddLine("Locked", 1, 0.3, 0.3, true)
+        tooltip:AddLine("Unlocks at " .. Chrome.FormatOwnedSoulAshValue(slotData.soulAshes) .. " Soul Ashes.", 0.8, 0.8, 0.8, true)
+    end
+
+    if slotData.perkData then
+        local qualityData = Chrome.GetOwnedEchoQuality(slotData.perkData.quality)
+        local qualityColor = qualityData.color
+        tooltip:AddLine(" ")
+        tooltip:AddLine(slotData.perkData.name, qualityColor[1], qualityColor[2], qualityColor[3], true)
+        tooltip:AddLine(qualityData.name, 0.62, 0.62, 0.62, true)
+        local description = Chrome.GetOwnedEchoDescription(slotData.perkData.spellId, slotData.perkData.count)
+        if description and description ~= "" then
+            tooltip:AddLine(" ")
+            tooltip:AddLine(description, 1, 0.82, 0, true)
+        end
+    elseif slotData.unlocked then
+        tooltip:AddLine("No permanent Echo is locked in this slot.", 0.8, 0.8, 0.8, true)
+    else
+        local spellName = slotData.spellId and _G.GetSpellInfo and _G.GetSpellInfo(slotData.spellId)
+        if spellName then
+            tooltip:AddLine(" ")
+            tooltip:AddLine(spellName, 0.4, 0.8, 1.0, true)
+        end
+    end
+
+    tooltip:Show()
+end
+
+function Chrome.ApplyOwnedLockedEchoSlotButton(button, slotData)
+    if not button or not slotData then
+        return
+    end
+
+    local icon = button.icon
+    local spellId = slotData.perkData and slotData.perkData.spellId or slotData.spellId
+    local _, spellIcon = Chrome.GetOwnedSpellNameAndIcon(spellId)
+    if icon then
+        icon:SetTexture(spellIcon)
+        icon:SetAlpha(slotData.unlocked and 1 or 0.35)
+        if icon.SetDesaturated then
+            icon:SetDesaturated(not slotData.unlocked)
+        end
+    end
+
+    if button.indexText then
+        button.indexText:SetText(Chrome.PERMANENT_ECHO_SLOT_ROMANS[slotData.index] or tostring(slotData.index))
+        if slotData.unlocked then
+            button.indexText:SetTextColor(0.1, 1, 0.1, 1)
+        else
+            button.indexText:SetTextColor(0.62, 0.62, 0.62, 1)
+        end
+    end
+
+    Chrome.SetBackdropColor(button, slotData.unlocked and Chrome.HOVER_BLUE_BACKDROP or Chrome.DARK, 0.92)
+    Chrome.SetBorderColor(button, slotData.perkData and Chrome.GOLD or Chrome.BLACK)
+    button._peeOwnedEchoSlotData = slotData
+end
+
+function Chrome.RefreshOwnedLockedEchoSlots(topBar, currentTotal)
+    local slotFrame = topBar and topBar.lockedEchoSlotsFrame
+    if not slotFrame then
+        return
+    end
+
+    local milestones = Chrome.GetOwnedPermanentEchoSlotMilestones()
+    if #milestones == 0 then
+        slotFrame:Hide()
+        return
+    end
+
+    local lockedPerks = Chrome.GetOwnedLockedPerkList()
+    local unlockedSlots = Chrome.GetOwnedPermanentEchoUnlockedSlotCount(currentTotal or 0)
+    slotFrame:Show()
+
+    for index, milestone in ipairs(milestones) do
+        local button = slotFrame.buttons and slotFrame.buttons[index]
+        if button then
+            local perkData = lockedPerks[index]
+            local slotData = {
+                index = index,
+                soulAshes = milestone.soulAshes,
+                spellId = milestone.spellId,
+                unlocked = index <= unlockedSlots,
+                perkData = perkData,
+            }
+            Chrome.ApplyOwnedLockedEchoSlotButton(button, slotData)
+            button:Show()
+        end
+    end
+
+    for index = #milestones + 1, #(slotFrame.buttons or {}) do
+        if slotFrame.buttons[index] then
+            slotFrame.buttons[index]:Hide()
+        end
+    end
+end
+
 function Chrome.WriteOwnedTopBarProgress(topBar)
     local progressBox = topBar and topBar.progressBox
     if not progressBox then
@@ -1807,6 +2132,7 @@ function Chrome.WriteOwnedTopBarProgress(topBar)
         progressBox.fill:Hide()
     end
     Chrome.UpdateOwnedProgressDecor(progressBox, width, fillWidth, ratio)
+    Chrome.RefreshOwnedLockedEchoSlots(topBar, current or 0)
 end
 
 function Chrome.EnsureOwnedSkillTreeTopBar()
@@ -1828,20 +2154,10 @@ function Chrome.EnsureOwnedSkillTreeTopBar()
     topBar:EnableMouse(true)
     topBar:RegisterForDrag("LeftButton")
     topBar:SetScript("OnDragStart", function()
-        local dragStart = peeOwnedSkillTreeFrame:GetScript("OnDragStart")
-        if dragStart then
-            dragStart(peeOwnedSkillTreeFrame)
-        else
-            peeOwnedSkillTreeFrame:StartMoving()
-        end
+        Chrome.ProxyOwnedSkillTreeDragStart()
     end)
     topBar:SetScript("OnDragStop", function()
-        local dragStop = peeOwnedSkillTreeFrame:GetScript("OnDragStop")
-        if dragStop then
-            dragStop(peeOwnedSkillTreeFrame)
-        else
-            peeOwnedSkillTreeFrame:StopMovingOrSizing()
-        end
+        Chrome.ProxyOwnedSkillTreeDragStop()
     end)
     Chrome.SetPlainBarBackdrop(topBar, 0.96)
 
@@ -1892,6 +2208,72 @@ function Chrome.EnsureOwnedSkillTreeTopBar()
     Chrome.ClearAndPoint(progressBox.label, "LEFT", progressBox, "LEFT", 10, 0)
     Chrome.ClearAndPoint(progressBox.value, "RIGHT", progressBox, "RIGHT", -12, 0)
     progressBox.label:SetText("Ashe Progression")
+
+    if not progressBox._peeOwnedProgressTooltipHooks then
+        progressBox:EnableMouse(true)
+        progressBox:RegisterForDrag("LeftButton")
+        progressBox:SetScript("OnEnter", function(self)
+            Chrome.ShowOwnedProgressTooltip(self)
+        end)
+        progressBox:SetScript("OnLeave", function()
+            Chrome.HideOwnedTooltip()
+        end)
+        progressBox:SetScript("OnDragStart", function()
+            Chrome.ProxyOwnedSkillTreeDragStart()
+        end)
+        progressBox:SetScript("OnDragStop", function()
+            Chrome.ProxyOwnedSkillTreeDragStop()
+        end)
+        progressBox._peeOwnedProgressTooltipHooks = true
+    end
+
+    local slotMilestones = Chrome.GetOwnedPermanentEchoSlotMilestones()
+    if not topBar.lockedEchoSlotsFrame then
+        topBar.lockedEchoSlotsFrame = CreateFrame("Frame", nil, topBar)
+        topBar.lockedEchoSlotsFrame.buttons = {}
+    end
+    local slotFrame = topBar.lockedEchoSlotsFrame
+    local slotSize = 20
+    local slotSpacing = 4
+    local slotFrameWidth = #slotMilestones > 0 and
+        ((#slotMilestones * slotSize) + ((#slotMilestones - 1) * slotSpacing)) or 1
+    Chrome.SetFrameSize(slotFrame, slotFrameWidth, 24)
+    Chrome.ClearAndPoint(slotFrame, "LEFT", progressBox, "RIGHT", 8, 0)
+    slotFrame:SetFrameLevel((topBar:GetFrameLevel() or 1) + 2)
+
+    for index = 1, #slotMilestones do
+        local button = slotFrame.buttons[index]
+        if not button then
+            button = CreateFrame("Button", nil, slotFrame)
+            slotFrame.buttons[index] = button
+            button.icon = button:CreateTexture(nil, "ARTWORK")
+            button.indexText = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 3, -3)
+            button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 3)
+            button.indexText:SetPoint("BOTTOM", button, "BOTTOM", 0, -1)
+            Chrome.SetFont(button.indexText, 8, Chrome.CREAM, slotSize, "CENTER")
+            button:EnableMouse(true)
+            button:SetScript("OnEnter", function(self)
+                Chrome.SetBorderColor(self, self._peeOwnedEchoSlotData and self._peeOwnedEchoSlotData.unlocked and
+                    Chrome.HOVER_BLUE or Chrome.RED_HOVER_BORDER)
+                Chrome.ShowOwnedLockedEchoSlotTooltip(self)
+            end)
+            button:SetScript("OnLeave", function(self)
+                Chrome.ApplyOwnedLockedEchoSlotButton(self, self._peeOwnedEchoSlotData)
+                Chrome.HideOwnedTooltip()
+            end)
+        end
+        Chrome.SetFrameSize(button, slotSize, slotSize)
+        Chrome.ClearAndPoint(button, "LEFT", slotFrame, "LEFT", (index - 1) * (slotSize + slotSpacing), 0)
+        button:SetFrameLevel((slotFrame:GetFrameLevel() or 1) + 1)
+        Chrome.SetDarkBackdrop(button, 2, 0.92)
+    end
+
+    for index = #slotMilestones + 1, #(slotFrame.buttons or {}) do
+        if slotFrame.buttons[index] then
+            slotFrame.buttons[index]:Hide()
+        end
+    end
 
     if not topBar.closeButton then
         topBar.closeButton = CreateFrame("Button", nil, topBar)

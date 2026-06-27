@@ -16,6 +16,10 @@ local RED_BACKDROP = {0.32, 0.1, 0.1}
 local RED_HOVER = {0.48, 0.16, 0.14}
 local RED_HOVER_BORDER = {1.0, 0.28, 0.24}
 local AFFIX_PURPLE = {0.69, 0.28, 0.97}
+local AFFIX_PURPLE_SELECTED = {0.69, 0.28, 0.97, 1}
+local TIER_ICON_REST = {0.06, 0.06, 0.06}
+local TIER_BORDER_REST = {0.2, 0.2, 0.2}
+local TIER_GLOW = {0.2, 1, 0.2, 0.9}
 local LEGENDARY = {1.0, 0.5, 0.0}
 local SIDE_PANEL_WIDTH = 260
 local SIDE_PANEL_HEIGHT = 430
@@ -135,6 +139,12 @@ local function SetButtonBackdrop(button, backdrop, border)
     end
     if button.SetBackdropBorderColor then
         button:SetBackdropBorderColor(border[1], border[2], border[3], 1)
+    end
+end
+
+local function SetTextureColor(texture, color)
+    if texture and texture.SetVertexColor then
+        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
     end
 end
 
@@ -534,11 +544,11 @@ local function CreateTierButton(parent, tier)
     local button = CreateFrame("Button", nil, parent)
     SetFrameSize(button, TIER_ICON_SIZE, TIER_ICON_SIZE)
     button.tier = tier
-    SetBackdrop(button, 2, 1, {0.06, 0.06, 0.06}, BLACK, 1)
+    SetBackdrop(button, 2, 1, TIER_ICON_REST, BLACK, 1)
 
     button.icon = button:CreateTexture(nil, "ARTWORK")
-    button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 3, -3)
-    button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 3)
+    button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
     if button.icon.SetTexCoord then
         button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     end
@@ -549,11 +559,128 @@ local function CreateTierButton(parent, tier)
     button.lockOverlay:SetVertexColor(0, 0, 0, 0.65)
     button.lockOverlay:Hide()
 
-    button.lockText = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    button.lockText:SetPoint("CENTER", button, "CENTER", 0, 0)
-    button.lockText:SetText("X")
-    SetFont(button.lockText, 14, MUTED, nil, "CENTER")
-    button.lockText:Hide()
+    button.lockIcon = button:CreateTexture(nil, "OVERLAY")
+    button.lockIcon:SetSize(20, 20)
+    button.lockIcon:SetPoint("CENTER", button, "CENTER", 0, 0)
+    button.lockIcon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-LOCK")
+    button.lockIcon:Hide()
+
+    local function makeEdge()
+        local texture = button:CreateTexture(nil, "OVERLAY")
+        texture:SetTexture("Interface\\Buttons\\WHITE8x8")
+        SetTextureColor(texture, TIER_BORDER_REST)
+        return texture
+    end
+
+    button.borderTop = makeEdge()
+    button.borderBottom = makeEdge()
+    button.borderLeft = makeEdge()
+    button.borderRight = makeEdge()
+    button.borderTop:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    button.borderTop:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+    button.borderTop:SetHeight(1)
+    button.borderBottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+    button.borderBottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+    button.borderBottom:SetHeight(1)
+    button.borderLeft:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    button.borderLeft:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+    button.borderLeft:SetWidth(1)
+    button.borderRight:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+    button.borderRight:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+    button.borderRight:SetWidth(1)
+
+    function button:SetBorderColor(red, green, blue, alpha)
+        local color = {red, green, blue, alpha or 1}
+        SetTextureColor(self.borderTop, color)
+        SetTextureColor(self.borderBottom, color)
+        SetTextureColor(self.borderLeft, color)
+        SetTextureColor(self.borderRight, color)
+    end
+
+    local function makeGlow()
+        local texture = button:CreateTexture(nil, "OVERLAY")
+        texture:SetTexture("Interface\\Buttons\\WHITE8x8")
+        SetTextureColor(texture, TIER_GLOW)
+        texture:Hide()
+        return texture
+    end
+
+    button.glowTop = makeGlow()
+    button.glowBottom = makeGlow()
+    button.glowLeft = makeGlow()
+    button.glowRight = makeGlow()
+    button.glowTop:SetPoint("TOPLEFT", button, "TOPLEFT", -2, 2)
+    button.glowTop:SetPoint("TOPRIGHT", button, "TOPRIGHT", 2, 2)
+    button.glowTop:SetHeight(3)
+    button.glowBottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -2, -2)
+    button.glowBottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 2, -2)
+    button.glowBottom:SetHeight(3)
+    button.glowLeft:SetPoint("TOPLEFT", button, "TOPLEFT", -2, 2)
+    button.glowLeft:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -2, -2)
+    button.glowLeft:SetWidth(3)
+    button.glowRight:SetPoint("TOPRIGHT", button, "TOPRIGHT", 2, 2)
+    button.glowRight:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 2, -2)
+    button.glowRight:SetWidth(3)
+
+    function button:SetGlow(show)
+        if show then
+            self.glowTop:Show()
+            self.glowBottom:Show()
+            self.glowLeft:Show()
+            self.glowRight:Show()
+            return
+        end
+
+        self.glowTop:Hide()
+        self.glowBottom:Hide()
+        self.glowLeft:Hide()
+        self.glowRight:Hide()
+    end
+
+    button.selectionFrame = CreateFrame("Frame", nil, button)
+    if button.selectionFrame.SetAllPoints then
+        button.selectionFrame:SetAllPoints(button)
+    else
+        button.selectionFrame:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+        button.selectionFrame:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+    end
+    if button.selectionFrame.SetFrameLevel and button.GetFrameLevel then
+        button.selectionFrame:SetFrameLevel((button:GetFrameLevel() or 1) + 5)
+    end
+    button.selectionFrame:Hide()
+
+    local function makeSelectionEdge()
+        local texture = button.selectionFrame:CreateTexture(nil, "OVERLAY")
+        texture:SetTexture("Interface\\Buttons\\WHITE8x8")
+        SetTextureColor(texture, AFFIX_PURPLE_SELECTED)
+        return texture
+    end
+
+    button.selectionTop = makeSelectionEdge()
+    button.selectionBottom = makeSelectionEdge()
+    button.selectionLeft = makeSelectionEdge()
+    button.selectionRight = makeSelectionEdge()
+    button.selectionTop:SetPoint("TOPLEFT", button.selectionFrame, "TOPLEFT", -2, 2)
+    button.selectionTop:SetPoint("TOPRIGHT", button.selectionFrame, "TOPRIGHT", 2, 2)
+    button.selectionTop:SetHeight(3)
+    button.selectionBottom:SetPoint("BOTTOMLEFT", button.selectionFrame, "BOTTOMLEFT", -2, -2)
+    button.selectionBottom:SetPoint("BOTTOMRIGHT", button.selectionFrame, "BOTTOMRIGHT", 2, -2)
+    button.selectionBottom:SetHeight(3)
+    button.selectionLeft:SetPoint("TOPLEFT", button.selectionFrame, "TOPLEFT", -2, 2)
+    button.selectionLeft:SetPoint("BOTTOMLEFT", button.selectionFrame, "BOTTOMLEFT", -2, -2)
+    button.selectionLeft:SetWidth(3)
+    button.selectionRight:SetPoint("TOPRIGHT", button.selectionFrame, "TOPRIGHT", 2, 2)
+    button.selectionRight:SetPoint("BOTTOMRIGHT", button.selectionFrame, "BOTTOMRIGHT", 2, -2)
+    button.selectionRight:SetWidth(3)
+
+    function button:SetSelected(show)
+        if show then
+            self.selectionFrame:Show()
+            return
+        end
+
+        self.selectionFrame:Hide()
+    end
 
     button.tierLabel = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     button.tierLabel:SetPoint("BOTTOM", button, "BOTTOM", 0, -14)
@@ -856,7 +983,16 @@ function overlay.UpdateEnhancedAffixTiers(panel)
             end
         end
 
-        SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06}, BLACK)
+        SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or TIER_ICON_REST, BLACK)
+        if button.SetBorderColor then
+            button:SetBorderColor(TIER_BORDER_REST[1], TIER_BORDER_REST[2], TIER_BORDER_REST[3], 1)
+        end
+        if button.SetSelected then
+            button:SetSelected(active)
+        end
+        if button.SetGlow then
+            button:SetGlow(false)
+        end
         if affix and affix.icon and button.icon.SetTexture then
             button.icon:SetTexture(affix.icon)
         elseif button.icon.SetTexture then
@@ -869,10 +1005,10 @@ function overlay.UpdateEnhancedAffixTiers(panel)
             button.icon:Show()
             if affix.learned then
                 button.lockOverlay:Hide()
-                button.lockText:Hide()
+                button.lockIcon:Hide()
             else
                 button.lockOverlay:Show()
-                button.lockText:Show()
+                button.lockIcon:Show()
             end
             if button.Enable then
                 button:Enable()
@@ -881,8 +1017,11 @@ function overlay.UpdateEnhancedAffixTiers(panel)
                 overlay.SelectEnhancedAffixTier(panel, tier)
             end)
             button:SetScript("OnEnter", function(self)
-                SetButtonBackdrop(self, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06},
-                    active and AFFIX_PURPLE or TIER_COLORS[tier])
+                SetButtonBackdrop(self, active and HOVER_BLUE_BACKDROP or TIER_ICON_REST, BLACK)
+                if self.SetBorderColor then
+                    local color = active and AFFIX_PURPLE or TIER_COLORS[tier]
+                    self:SetBorderColor(color[1], color[2], color[3], 1)
+                end
                 if GameTooltip then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     if GameTooltip.SetSpellByID then
@@ -914,7 +1053,10 @@ function overlay.UpdateEnhancedAffixTiers(panel)
                 end
             end)
             button:SetScript("OnLeave", function()
-                SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06}, BLACK)
+                SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or TIER_ICON_REST, BLACK)
+                if button.SetBorderColor then
+                    button:SetBorderColor(TIER_BORDER_REST[1], TIER_BORDER_REST[2], TIER_BORDER_REST[3], 1)
+                end
                 if GameTooltip then
                     GameTooltip:Hide()
                 end
@@ -922,7 +1064,7 @@ function overlay.UpdateEnhancedAffixTiers(panel)
         else
             button.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
             button.lockOverlay:Show()
-            button.lockText:Show()
+            button.lockIcon:Show()
             if button.icon.SetDesaturated then
                 button.icon:SetDesaturated(true)
             end
@@ -932,8 +1074,11 @@ function overlay.UpdateEnhancedAffixTiers(panel)
                 button:Disable()
             end
             button:SetScript("OnEnter", function(self)
-                SetButtonBackdrop(self, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06},
-                    active and AFFIX_PURPLE or TIER_COLORS[tier])
+                SetButtonBackdrop(self, active and HOVER_BLUE_BACKDROP or TIER_ICON_REST, BLACK)
+                if self.SetBorderColor then
+                    local color = active and AFFIX_PURPLE or TIER_COLORS[tier]
+                    self:SetBorderColor(color[1], color[2], color[3], 1)
+                end
                 if GameTooltip then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     if unavailable[tier] then
@@ -948,7 +1093,10 @@ function overlay.UpdateEnhancedAffixTiers(panel)
                 end
             end)
             button:SetScript("OnLeave", function()
-                SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06}, BLACK)
+                SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or TIER_ICON_REST, BLACK)
+                if button.SetBorderColor then
+                    button:SetBorderColor(TIER_BORDER_REST[1], TIER_BORDER_REST[2], TIER_BORDER_REST[3], 1)
+                end
                 if GameTooltip then
                     GameTooltip:Hide()
                 end
@@ -957,7 +1105,9 @@ function overlay.UpdateEnhancedAffixTiers(panel)
         end
 
         if affix and affix.learned and panel.equippedCounts and (panel.equippedCounts[affix.id] or 0) > 0 then
-            SetButtonBackdrop(button, active and HOVER_BLUE_BACKDROP or {0.06, 0.06, 0.06}, BLACK)
+            if button.SetGlow then
+                button:SetGlow(true)
+            end
         end
     end
 end

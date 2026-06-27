@@ -4,7 +4,7 @@ ProjectEbonholdEnhanced = ProjectEbonholdEnhanced or {}
 
 local overlay = ProjectEbonholdEnhanced
 overlay.name = addonName
-overlay.version = "0.1.61"
+overlay.version = "0.1.62"
 overlay.enabled = false
 overlay.isPTR = false
 
@@ -185,69 +185,7 @@ function overlay.GetPerkUIScale()
     return ClampNumber(GetSetting("perkUIScale"), 0.5, 3.0, DEFAULT_SETTINGS.perkUIScale)
 end
 
-local SERVER_OPTION_OVERRIDES = {
-    noPerkFadeAnimations = function()
-        return overlay.IsPerkFadeAnimationDisabled()
-    end,
-    noRerollConfirm = function()
-        return overlay.IsRerollConfirmationRemoved()
-    end,
-    rerollAutoRepopulate = function()
-        return true
-    end,
-    echoesVisibleOnLevelUp = function()
-        return overlay.IsKeepEchoesVisibleOnLevelUpEnabled()
-    end,
-    autoShowEchoes = function()
-        return overlay.IsAutoShowEchoChoicesEnabled()
-    end,
-    perkDirectBanish = function()
-        return true
-    end,
-    perkShowSelectCount = function()
-        return true
-    end,
-    perkUIScale = function()
-        return overlay.GetPerkUIScale()
-    end,
-    transparentDesign = function()
-        return overlay.IsTransparentDesignEnabled()
-    end
-}
-
-local function GetServerOptionOverride(key)
-    local provider = SERVER_OPTION_OVERRIDES[key]
-    if not provider then
-        return nil, false
-    end
-
-    return provider(), true
-end
-
 function overlay.InstallServerOptionReadOverrides()
-    local service = _G and _G.ProjectEbonholdOptionsService
-    if not service or type(service.GetSetting) ~= "function" or service._peeOptionReadOverridesInstalled then
-        return
-    end
-
-    local originalGetSetting = service.GetSetting
-    service._peeOriginalGetSetting = originalGetSetting
-    service.GetSetting = function(selfOrKey, maybeKey, ...)
-        local key = type(selfOrKey) == "string" and selfOrKey or maybeKey
-        if overlay.enabled and not overlay.isPTR then
-            local value, found = GetServerOptionOverride(key)
-            if found then
-                return value
-            end
-        end
-
-        if type(selfOrKey) == "string" then
-            return originalGetSetting(service, selfOrKey, maybeKey, ...)
-        end
-
-        return originalGetSetting(selfOrKey, maybeKey, ...)
-    end
-    service._peeOptionReadOverridesInstalled = true
 end
 
 local function FormatPercent(value)
@@ -1100,6 +1038,22 @@ overlay.BuildLockedEchoExportRows = function(grantedPerks, lockedPerks)
     return rows
 end
 
+local function FormatEchoExportCell(value, width)
+    local text = tostring(value or "")
+    local padding = width - string.len(text)
+    if padding <= 0 then
+        return text
+    end
+    return text .. string.rep(" ", padding)
+end
+
+local function FormatEchoExportRow(name, quality, count, spellId)
+    return FormatEchoExportCell(name, 32) .. "  " ..
+        FormatEchoExportCell(quality, 10) .. "  " ..
+        FormatEchoExportCell(count, 5) .. "  " ..
+        tostring(spellId or "Unknown")
+end
+
 overlay.AddEchoExportRows = function(lines, sectionName, rows)
     local qualityNames = {
         [-1] = "Unknown",
@@ -1111,7 +1065,7 @@ overlay.AddEchoExportRows = function(lines, sectionName, rows)
     }
 
     lines[#lines + 1] = sectionName
-    lines[#lines + 1] = "Name\tQuality\tCount\tSpell ID"
+    lines[#lines + 1] = FormatEchoExportRow("Name", "Quality", "Count", "Spell ID")
 
     if not rows or #rows == 0 then
         lines[#lines + 1] = "None"
@@ -1120,12 +1074,12 @@ overlay.AddEchoExportRows = function(lines, sectionName, rows)
     end
 
     for _, row in ipairs(rows) do
-        lines[#lines + 1] = table.concat({
+        lines[#lines + 1] = FormatEchoExportRow(
             row.name or ("Spell " .. tostring(row.spellId or "Unknown")),
             qualityNames[row.quality or -1] or qualityNames[-1],
             tostring(row.count or 0),
-            tostring(row.spellId or "Unknown"),
-        }, "\t")
+            tostring(row.spellId or "Unknown")
+        )
     end
 
     lines[#lines + 1] = ""
@@ -6941,22 +6895,58 @@ overlay.LayoutExtractionActionButton = function(button, extractionFrame, side)
         margin = minimumMargin
     end
 
-    SetFrameSize(button, buttonWidth, 34)
-    if button.ClearAllPoints then
-        button:ClearAllPoints()
+    local targetPoint = side == "left" and "BOTTOMLEFT" or "BOTTOMRIGHT"
+    local targetRelativePoint = targetPoint
+    local targetX = side == "left" and margin or -margin
+    local targetY = 44
+    local currentWidth = button.GetWidth and button:GetWidth()
+    local currentHeight = button.GetHeight and button:GetHeight()
+    local layout = button._peeExtractionLayout
+    local sizeChanged = currentWidth ~= buttonWidth or currentHeight ~= 34
+
+    if currentWidth == nil or currentHeight == nil then
+        sizeChanged = not layout or layout.width ~= buttonWidth or layout.height ~= 34
     end
+
+    if sizeChanged then
+        SetFrameSize(button, buttonWidth, 34)
+    end
+
     if not button.SetPoint then
         return
     end
 
-    if side == "left" then
-        button:SetPoint("BOTTOMLEFT", extractionFrame, "BOTTOMLEFT",
-            margin, 44)
-        return
+    local currentPoint, currentRelativeTo, currentRelativePoint, currentX, currentY
+    if button.GetPoint then
+        currentPoint, currentRelativeTo, currentRelativePoint, currentX, currentY = button:GetPoint()
+    elseif button.point then
+        currentPoint, currentRelativeTo, currentRelativePoint, currentX, currentY = button.point[1], button.point[2],
+            button.point[3], button.point[4], button.point[5]
     end
 
-    button:SetPoint("BOTTOMRIGHT", extractionFrame, "BOTTOMRIGHT",
-        -margin, 44)
+    local anchorChanged = currentPoint ~= targetPoint or currentRelativeTo ~= extractionFrame or
+        currentRelativePoint ~= targetRelativePoint or currentX ~= targetX or currentY ~= targetY
+    if currentPoint == nil then
+        anchorChanged = not layout or layout.point ~= targetPoint or layout.relativeTo ~= extractionFrame or
+            layout.relativePoint ~= targetRelativePoint or layout.x ~= targetX or layout.y ~= targetY
+    end
+
+    if anchorChanged then
+        if button.ClearAllPoints then
+            button:ClearAllPoints()
+        end
+        button:SetPoint(targetPoint, extractionFrame, targetRelativePoint, targetX, targetY)
+    end
+
+    button._peeExtractionLayout = {
+        width = buttonWidth,
+        height = 34,
+        point = targetPoint,
+        relativeTo = extractionFrame,
+        relativePoint = targetRelativePoint,
+        x = targetX,
+        y = targetY,
+    }
 end
 
 overlay.ShowAffixBook = function()
@@ -7165,6 +7155,40 @@ overlay.RefreshExtractionActionButtons = function(extractionFrame)
     end
 
     overlay.EnsureExtractionAffixButton(extractionFrame)
+end
+
+overlay.EnsureExtractionSlotHooks = function(slot)
+    if not slot or not slot.GetScript or not slot.SetScript then
+        return
+    end
+
+    if not slot._peeExtractionReceiveDragHooked then
+        local originalReceiveDrag = slot:GetScript("OnReceiveDrag")
+        if type(originalReceiveDrag) == "function" then
+            slot._peeExtractionReceiveDragHooked = true
+            slot:SetScript("OnReceiveDrag", function(self, ...)
+                local firstResult, secondResult, thirdResult = originalReceiveDrag(self, ...)
+                if overlay.ApplyExtractionTheme then
+                    overlay.ApplyExtractionTheme()
+                end
+                return firstResult, secondResult, thirdResult
+            end)
+        end
+    end
+
+    if not slot._peeExtractionClickHooked then
+        local originalClick = slot:GetScript("OnClick")
+        if type(originalClick) == "function" then
+            slot._peeExtractionClickHooked = true
+            slot:SetScript("OnClick", function(self, ...)
+                local firstResult, secondResult, thirdResult = originalClick(self, ...)
+                if overlay.ApplyExtractionTheme then
+                    overlay.ApplyExtractionTheme()
+                end
+                return firstResult, secondResult, thirdResult
+            end)
+        end
+    end
 end
 
 local function SkinAffixRows(panel)
@@ -7561,13 +7585,13 @@ local function ApplyExtractionTheme()
         ConfigureExtractionText(extractionFrame.title, 12, MAGE_BLUE, nil, "CENTER")
         ConfigureExtractionText(extractionFrame.hintText, 11, MUTED, 260, "CENTER")
         ConfigureExtractionText(extractionFrame.statusText, 12, CREAM, 270, "CENTER")
-        SkinMatchingButtons(extractionFrame, { "Extract", "Choose an Affix", "Change the Affix", "Apply Affix",
-            "Already learned" })
+        SkinMatchingButtons(extractionFrame, { "Extract", "Already learned" })
         overlay.RefreshExtractionActionButtons(extractionFrame)
     end
 
     local slot = _G and _G.EbonholdExtractionSlot
     if slot then
+        overlay.EnsureExtractionSlotHooks(slot)
         SetExtractionBackdrop(slot, 4, 4, nil, BLACK)
         if slot.icon and slot.icon.SetPoint then
             if slot.icon.ClearAllPoints then
@@ -8613,7 +8637,7 @@ overlay.skillTreeDescriptionCache = overlay.skillTreeDescriptionCache or {}
 
 overlay.GetSkillTreeSearchTerms = function(searchText)
     local lowerSearch = string.lower(searchText or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if lowerSearch == "" or lowerSearch == "missing" then
+    if lowerSearch == "" or lowerSearch == "missing" or lowerSearch == "perm" or lowerSearch == "permanent" then
         return lowerSearch, {}
     end
 
@@ -8651,10 +8675,14 @@ overlay.GetSkillTreeSpellDescription = function(spellId)
     return description
 end
 
-overlay.SkillTreeNodeMatchesSearch = function(button, terms, searchMissingNodes)
+overlay.SkillTreeNodeMatchesSearch = function(button, terms, searchMissingNodes, searchPermanentNodes)
     if searchMissingNodes then
         local currentRank = ParseRankText(button and button.rankText)
         return (currentRank or 0) == 0
+    end
+
+    if searchPermanentNodes then
+        return button and button.permanent and true or false
     end
 
     if not button or type(button.spells) ~= "table" then
@@ -8890,6 +8918,7 @@ overlay.ApplySkillTreeSearchFilter = function(searchText)
     local lowerSearch, terms = overlay.GetSkillTreeSearchTerms(searchText)
     local isEmpty = lowerSearch == ""
     local searchMissingNodes = lowerSearch == "missing"
+    local searchPermanentNodes = lowerSearch == "perm" or lowerSearch == "permanent"
     local matches = {}
 
     if isEmpty then
@@ -8907,7 +8936,7 @@ overlay.ApplySkillTreeSearchFilter = function(searchText)
 
     overlay._skillTreeSearchHadFilter = true
     for _, button in ipairs(overlay.GetSkillTreeNodeButtons()) do
-        local nodeMatches = overlay.SkillTreeNodeMatchesSearch(button, terms, searchMissingNodes)
+        local nodeMatches = overlay.SkillTreeNodeMatchesSearch(button, terms, searchMissingNodes, searchPermanentNodes)
         if button.SetAlpha then
             button:SetAlpha(nodeMatches and 1.0 or 0.15)
         end
@@ -9959,14 +9988,27 @@ local function EnsureSkillTreeMoveResize(skillTreeFrame)
         end
 
         setGripColor(1, 0.62, 0, 1)
-        resizeHandle:SetScript("OnEnter", function()
+        resizeHandle:SetScript("OnEnter", function(self)
             setGripColor(1, 0.82, 0, 1)
+            if _G.GameTooltip then
+                if _G.GameTooltip.ClearLines then _G.GameTooltip:ClearLines() end
+                _G.GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                _G.GameTooltip:SetText("Resize Soul Ashe Tree", 1, 0.82, 0)
+                _G.GameTooltip:AddLine("Drag this corner to resize the tree window.", 0.8, 0.8, 0.8, true)
+                _G.GameTooltip:Show()
+            end
         end)
         resizeHandle:SetScript("OnLeave", function()
             setGripColor(1, 0.62, 0, 1)
+            if _G.GameTooltip then
+                _G.GameTooltip:Hide()
+            end
         end)
         resizeHandle:SetScript("OnMouseDown", function()
             setGripColor(1, 0.82, 0, 1)
+            if _G.GameTooltip then
+                _G.GameTooltip:Hide()
+            end
             overlay._peeSkillTreeFrameInteracting = true
             overlay._peeSkillTreeFitDirty = nil
             if overlay.SetSkillTreeNodeBorderFreeze then
