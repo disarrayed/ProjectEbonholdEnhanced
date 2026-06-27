@@ -278,6 +278,10 @@ local validateBtn = nil
 
 local nodesById = {}
 local treeSearchBox = nil
+local asheProgressSimulation = {
+    active = false,
+    duration = 10,
+}
 local lines = {}
 local neighbors = {}
 local parentsOf = {}
@@ -305,6 +309,59 @@ local TREE_SEARCH_ALIASES = {
     ["vanish"]   = {"vanish", "stealth", "invis"},
 }
 local treeDescCache = {}
+
+local function CreateWhiteTexture(parent, key, layer)
+    if not parent or not parent.CreateTexture then
+        return nil
+    end
+    if not parent[key] then
+        parent[key] = parent:CreateTexture(nil, layer or "OVERLAY")
+        parent[key]:SetTexture("Interface\\Buttons\\WHITE8x8")
+    end
+    return parent[key]
+end
+
+local function GetOwnedAsheProgressCap()
+    local serverAddon = _G and _G.ProjectEbonhold
+    local constants = serverAddon and serverAddon.Constants
+    local maxSoulAshes = constants and tonumber(constants.MAX_SOUL_ASHES)
+    if maxSoulAshes and maxSoulAshes > 0 then
+        return maxSoulAshes
+    end
+
+    local cap = 0
+    local milestoneData = serverAddon and serverAddon.SoulAshesMilestones
+    for _, data in ipairs(milestoneData or {}) do
+        local value = type(data) == "table" and tonumber(data.soulAshes) or tonumber(data)
+        if value and value > cap then
+            cap = value
+        end
+    end
+
+    if cap > 0 then
+        return cap
+    end
+
+    return 100
+end
+
+local function GetAsheProgressSimulationValue()
+    if not asheProgressSimulation.active then
+        return nil
+    end
+
+    local getTime = _G and _G.GetTime
+    local now = getTime and getTime() or 0
+    local startedAt = asheProgressSimulation.startedAt or now
+    local duration = asheProgressSimulation.duration or 10
+    local cap = asheProgressSimulation.cap or GetOwnedAsheProgressCap()
+    local ratio = 1
+    if duration > 0 then
+        ratio = math.max(0, math.min(1, (now - startedAt) / duration))
+    end
+    local current = math.floor(1 + ((cap - 1) * ratio) + 0.5)
+    return current, cap, ratio
+end
 
 local PopulateSearchResults
 local HideSearchResults
@@ -1614,29 +1671,6 @@ nodeStatsText:SetJustifyH("LEFT")
 nodeStatsText:SetText("")
 peeOwnedSkillTreeFrame.nodeStatsText = nodeStatsText
 
-local function UpdateNodeStats()
-    if not peeOwnedSkillTreeFrame.nodeStatsText then return end
-    local totalNodes, usedNodes, permanentTotal, permanentUsed = 0, 0, 0, 0
-    for nodeId, btn in pairs(nodesById) do
-        totalNodes = totalNodes + 1
-        local rank = nodeRanks[nodeId] or 0
-        if rank > 0 then usedNodes = usedNodes + 1 end
-        if btn.permanent then
-            permanentTotal = permanentTotal + 1
-            if rank > 0 then permanentUsed = permanentUsed + 1 end
-        end
-    end
-    local nonPermUsed = usedNodes - permanentUsed
-    local nonPermTotal = totalNodes - permanentTotal
-    peeOwnedSkillTreeFrame.nodeStatsText:SetText(
-        "|cffbbbbbbNodes:|r " .. nonPermUsed .. "/" .. nonPermTotal ..
-        "  |cffbbbbbbPerm:|r " .. permanentUsed .. "/" .. permanentTotal ..
-        "  |cffbbbbbbFree Pts:|r " .. (TALENT_POINTS_TOTAL or 0))
-    if Chrome.RefreshOwnedSkillTreeChrome then
-        Chrome.RefreshOwnedSkillTreeChrome()
-    end
-end
-
 function Chrome.CollectOwnedSkillTreeStats()
     local totalNodes, usedNodes, permanentTotal, permanentUsed = 0, 0, 0, 0
     for nodeId, btn in pairs(nodesById) do
@@ -1661,17 +1695,89 @@ function Chrome.CollectOwnedSkillTreeStats()
     }
 end
 
-function Chrome.OwnedProgressText()
+function Chrome.OwnedProgressValues()
+    local simulationCurrent, simulationTarget = GetAsheProgressSimulationValue()
+    if simulationCurrent and simulationTarget then
+        return simulationCurrent, simulationTarget, tostring(simulationCurrent) .. "/" .. tostring(simulationTarget)
+    end
+
     local progressFrame = peeOwnedSkillTreeFrame and peeOwnedSkillTreeFrame.progressBar
+    local current = progressFrame and tonumber(progressFrame.currentTotal)
+    local target = progressFrame and tonumber(progressFrame.nextMilestone)
     local progressText = progressFrame and progressFrame.progressText and
         progressFrame.progressText.GetText and progressFrame.progressText:GetText()
     if progressText and progressText ~= "" then
-        return progressText
+        return current, target, progressText
     end
-    if progressFrame and progressFrame.currentTotal and progressFrame.nextMilestone then
-        return tostring(progressFrame.currentTotal) .. "/" .. tostring(progressFrame.nextMilestone)
+    if current and target then
+        return current, target, tostring(current) .. "/" .. tostring(target)
     end
-    return "No milestone data"
+    return nil, nil, "No milestone data"
+end
+
+function Chrome.OwnedProgressText()
+    local _, _, progressText = Chrome.OwnedProgressValues()
+    return progressText
+end
+
+function Chrome.UpdateOwnedProgressDecor(progressBox, width, fillWidth, ratio)
+    if not progressBox then
+        return
+    end
+
+    local trackTopLine = CreateWhiteTexture(progressBox, "trackTopLine", "OVERLAY")
+    local trackBottomLine = CreateWhiteTexture(progressBox, "trackBottomLine", "OVERLAY")
+    if progressBox.trackSheen and progressBox.trackSheen.Hide then progressBox.trackSheen:Hide() end
+    if progressBox.trackMidLine and progressBox.trackMidLine.Hide then progressBox.trackMidLine:Hide() end
+
+    if trackTopLine then
+        if trackTopLine.ClearAllPoints then trackTopLine:ClearAllPoints() end
+        trackTopLine:SetPoint("TOPLEFT", progressBox, "TOPLEFT", 3, -3)
+        trackTopLine:SetPoint("TOPRIGHT", progressBox, "TOPRIGHT", -3, -3)
+        trackTopLine:SetHeight(1)
+        trackTopLine:SetVertexColor(1, 1, 1, 0.44)
+    end
+
+    if trackBottomLine then
+        if trackBottomLine.ClearAllPoints then trackBottomLine:ClearAllPoints() end
+        trackBottomLine:SetPoint("BOTTOMLEFT", progressBox, "BOTTOMLEFT", 3, 3)
+        trackBottomLine:SetPoint("BOTTOMRIGHT", progressBox, "BOTTOMRIGHT", -3, 3)
+        trackBottomLine:SetHeight(1)
+        trackBottomLine:SetVertexColor(1, 1, 1, 0.18)
+    end
+
+    local showEnd = ratio and ratio > 0 and fillWidth and fillWidth > 0
+    local markerX = math.max(4, math.min((width or 0) - 4, 3 + (fillWidth or 0)))
+    local fillSheen = CreateWhiteTexture(progressBox, "fillSheen", "ARTWORK")
+    local endMarker = CreateWhiteTexture(progressBox, "endMarker", "OVERLAY")
+    local endShadow = CreateWhiteTexture(progressBox, "endMarkerShadow", "OVERLAY")
+    if showEnd then
+        if fillSheen then
+            if fillSheen.ClearAllPoints then fillSheen:ClearAllPoints() end
+            fillSheen:SetPoint("LEFT", progressBox, "LEFT", 3, 3)
+            Chrome.SetFrameSize(fillSheen, fillWidth, 7)
+            fillSheen:SetVertexColor(1, 1, 1, 0.16)
+            fillSheen:Show()
+        end
+        if endShadow then
+            if endShadow.ClearAllPoints then endShadow:ClearAllPoints() end
+            Chrome.SetFrameSize(endShadow, 5, 18)
+            endShadow:SetPoint("CENTER", progressBox, "LEFT", markerX, 0)
+            endShadow:SetVertexColor(0, 0, 0, 0.68)
+            endShadow:Show()
+        end
+        if endMarker then
+            if endMarker.ClearAllPoints then endMarker:ClearAllPoints() end
+            Chrome.SetFrameSize(endMarker, 2, 20)
+            endMarker:SetPoint("CENTER", progressBox, "LEFT", markerX, 0)
+            endMarker:SetVertexColor(1, 1, 1, 0.96)
+            endMarker:Show()
+        end
+    else
+        if fillSheen and fillSheen.Hide then fillSheen:Hide() end
+        if endShadow and endShadow.Hide then endShadow:Hide() end
+        if endMarker and endMarker.Hide then endMarker:Hide() end
+    end
 end
 
 function Chrome.WriteOwnedTopBarProgress(topBar)
@@ -1680,19 +1786,27 @@ function Chrome.WriteOwnedTopBarProgress(topBar)
         return
     end
 
-    local progressText = Chrome.OwnedProgressText()
+    local current, target, progressText = Chrome.OwnedProgressValues()
     progressBox.value:SetText(progressText)
 
-    local progressFrame = peeOwnedSkillTreeFrame and peeOwnedSkillTreeFrame.progressBar
-    local current = progressFrame and tonumber(progressFrame.currentTotal)
-    local target = progressFrame and tonumber(progressFrame.nextMilestone)
     local ratio = 0
     if current and target and target > 0 then
         ratio = math.max(0, math.min(1, current / target))
     end
 
     local width = progressBox._peeProgressWidth or (progressBox.GetWidth and progressBox:GetWidth()) or 300
-    progressBox.fill:SetWidth(math.max(1, math.floor(width * ratio)))
+    local innerWidth = math.max(1, width - 6)
+    local fillWidth = math.floor(innerWidth * ratio)
+    if ratio > 0 and fillWidth < 2 then
+        fillWidth = 2
+    end
+    if fillWidth > 0 then
+        progressBox.fill:SetWidth(fillWidth)
+        progressBox.fill:Show()
+    else
+        progressBox.fill:Hide()
+    end
+    Chrome.UpdateOwnedProgressDecor(progressBox, width, fillWidth, ratio)
 end
 
 function Chrome.EnsureOwnedSkillTreeTopBar()
@@ -1746,20 +1860,26 @@ function Chrome.EnsureOwnedSkillTreeTopBar()
         topBar.progressBox = CreateFrame("Frame", nil, topBar)
     end
     local progressBox = topBar.progressBox
-    local progressWidth = math.max(280, math.floor((frameWidth - 360) * 0.5))
+    local maxProgressWidth = math.max(360, frameWidth - 330)
+    local desiredProgressWidth = math.floor(frameWidth * 0.48)
+    local progressWidth = math.max(420, math.min(maxProgressWidth, desiredProgressWidth))
     progressBox._peeProgressWidth = progressWidth
     Chrome.SetFrameSize(progressBox, progressWidth, 24)
     Chrome.ClearAndPoint(progressBox, "CENTER", topBar, "CENTER", 0, 0)
-    Chrome.SetPlainBarBackdrop(progressBox, 0.92)
-    Chrome.SetBackdropColor(progressBox, {0.02, 0.02, 0.02}, 0.92)
+    Chrome.SetDarkBackdrop(progressBox, 2, 0.96)
+    Chrome.SetBackdropColor(progressBox, {0.008, 0.008, 0.008}, 0.96)
+    Chrome.SetBorderColor(progressBox, Chrome.BLACK)
 
     if not progressBox.fill then
         progressBox.fill = progressBox:CreateTexture(nil, "ARTWORK")
         progressBox.fill:SetTexture("Interface\\Buttons\\WHITE8x8")
-        progressBox.fill:SetPoint("LEFT", progressBox, "LEFT", 1, 0)
-        progressBox.fill:SetHeight(24)
     end
-    progressBox.fill:SetVertexColor(Chrome.MAGE_BLUE[1], Chrome.MAGE_BLUE[2], Chrome.MAGE_BLUE[3], 0.42)
+    if progressBox.fill.ClearAllPoints then
+        progressBox.fill:ClearAllPoints()
+    end
+    progressBox.fill:SetPoint("LEFT", progressBox, "LEFT", 3, 0)
+    progressBox.fill:SetHeight(18)
+    progressBox.fill:SetVertexColor(Chrome.MAGE_BLUE[1], Chrome.MAGE_BLUE[2], Chrome.MAGE_BLUE[3], 0.58)
 
     if not progressBox.label then
         progressBox.label = progressBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1767,10 +1887,10 @@ function Chrome.EnsureOwnedSkillTreeTopBar()
     if not progressBox.value then
         progressBox.value = progressBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     end
-    Chrome.SetFont(progressBox.label, 11, Chrome.GOLD, 128, "LEFT")
-    Chrome.SetFont(progressBox.value, 11, Chrome.CREAM, math.max(120, progressWidth - 150), "RIGHT")
+    Chrome.SetFont(progressBox.label, 11, Chrome.CREAM, 118, "LEFT")
+    Chrome.SetFont(progressBox.value, 10, Chrome.CREAM, math.max(260, progressWidth - 140), "RIGHT")
     Chrome.ClearAndPoint(progressBox.label, "LEFT", progressBox, "LEFT", 10, 0)
-    Chrome.ClearAndPoint(progressBox.value, "RIGHT", progressBox, "RIGHT", -10, 0)
+    Chrome.ClearAndPoint(progressBox.value, "RIGHT", progressBox, "RIGHT", -12, 0)
     progressBox.label:SetText("Ashe Progression")
 
     if not topBar.closeButton then
@@ -1803,20 +1923,88 @@ function Chrome.RefreshOwnedSkillTreeTopBar()
     Chrome.WriteOwnedTopBarProgress(topBar)
 end
 
+function Chrome.RefreshSearchBoxState(searchBox)
+    if not searchBox then
+        return
+    end
+
+    local text = searchBox.GetText and searchBox:GetText() or ""
+    local hasText = text ~= ""
+    if searchBox._peeOwnedSearchFocused then
+        Chrome.SetBackdropColor(searchBox, Chrome.HOVER_BLUE_BACKDROP, 0.96)
+        Chrome.SetBorderColor(searchBox, Chrome.HOVER_BLUE)
+    else
+        Chrome.SetBackdropColor(searchBox, {0.01, 0.01, 0.01}, 0.96)
+        Chrome.SetBorderColor(searchBox, Chrome.BLACK)
+    end
+
+    if searchBox.placeholder then
+        if hasText then
+            searchBox.placeholder:Hide()
+        else
+            searchBox.placeholder:Show()
+        end
+    end
+end
+
+function Chrome.GetRegionSearchToken(region)
+    if not region then
+        return ""
+    end
+
+    local name = region.GetName and region:GetName() or ""
+    local texture = region.GetTexture and region:GetTexture() or ""
+    return string.lower(tostring(name) .. " " .. tostring(texture))
+end
+
+function Chrome.IsSearchCursorRegion(region)
+    local token = Chrome.GetRegionSearchToken(region)
+    return token:find("cursor", 1, true) ~= nil or token:find("caret", 1, true) ~= nil
+end
+
+function Chrome.IsSearchTemplateRegion(searchBox, region)
+    if not region or not region.SetTexture or Chrome.IsSearchCursorRegion(region) then
+        return false
+    end
+
+    local token = Chrome.GetRegionSearchToken(region)
+    if token == "" then
+        return false
+    end
+
+    if token:find("inputbox", 1, true) or token:find("editbox", 1, true) or
+        token:find("common-input", 1, true) then
+        return true
+    end
+
+    local searchName = searchBox and searchBox.GetName and searchBox:GetName()
+    local searchToken = searchName and string.lower(tostring(searchName)) or ""
+    if searchToken ~= "" and token:find(searchToken, 1, true) then
+        return token:find("left", 1, true) ~= nil or token:find("middle", 1, true) ~= nil or
+            token:find("mid", 1, true) ~= nil or token:find("right", 1, true) ~= nil
+    end
+
+    return false
+end
+
+function Chrome.HideSearchBoxTemplateArt(searchBox)
+    if not searchBox or not searchBox.GetRegions then
+        return
+    end
+
+    for _, region in ipairs({ searchBox:GetRegions() }) do
+        if Chrome.IsSearchTemplateRegion(searchBox, region) then
+            Chrome.HideRegion(region)
+        end
+    end
+end
+
 function Chrome.SetSearchBoxBackdrop(searchBox)
     if not searchBox then
         return
     end
-    if searchBox.GetRegions then
-        for _, region in ipairs({ searchBox:GetRegions() }) do
-            if region and region.SetTexture then
-                Chrome.HideRegion(region)
-            end
-        end
-    end
+    Chrome.HideSearchBoxTemplateArt(searchBox)
     Chrome.SetDarkBackdrop(searchBox, 2, 0.96)
-    Chrome.SetBackdropColor(searchBox, {0.01, 0.01, 0.01}, 0.96)
-    Chrome.SetBorderColor(searchBox, Chrome.BLACK)
     if searchBox.SetTextColor then
         searchBox:SetTextColor(Chrome.CREAM[1], Chrome.CREAM[2], Chrome.CREAM[3], 1)
     end
@@ -1824,18 +2012,31 @@ function Chrome.SetSearchBoxBackdrop(searchBox)
         searchBox:SetFont("Fonts\\FRIZQT__.TTF", overlay.ScaledFontSize and overlay.ScaledFontSize(11) or 11,
             "OUTLINE")
     end
+    if not searchBox.placeholder and searchBox.CreateFontString then
+        searchBox.placeholder = searchBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        Chrome.SetFont(searchBox.placeholder, 10, {0.55, 0.55, 0.55}, Chrome.STATUS_SEARCH_WIDTH - 28, "LEFT")
+        searchBox.placeholder:SetPoint("LEFT", searchBox, "LEFT", 8, 0)
+        searchBox.placeholder:SetText("Search...")
+    end
     if searchBox._peeOwnedSearchHooks then
+        Chrome.RefreshSearchBoxState(searchBox)
         return
     end
     if searchBox.HookScript then
         searchBox:HookScript("OnEditFocusGained", function(self)
-            Chrome.SetBorderColor(self, Chrome.HOVER_BLUE)
+            self._peeOwnedSearchFocused = true
+            Chrome.RefreshSearchBoxState(self)
         end)
         searchBox:HookScript("OnEditFocusLost", function(self)
-            Chrome.SetBorderColor(self, Chrome.BLACK)
+            self._peeOwnedSearchFocused = false
+            Chrome.RefreshSearchBoxState(self)
+        end)
+        searchBox:HookScript("OnTextChanged", function(self)
+            Chrome.RefreshSearchBoxState(self)
         end)
     end
     searchBox._peeOwnedSearchHooks = true
+    Chrome.RefreshSearchBoxState(searchBox)
 end
 
 function Chrome.LayoutOwnedSkillTreeStatusBar(bottomBar)
@@ -1911,9 +2112,10 @@ function Chrome.LayoutOwnedSkillTreeStatusBar(bottomBar)
         Chrome.ClearAndPoint(treeSearchBox, "RIGHT", bottomBar, "RIGHT", -46, 0)
     end
     if bottomBar.searchLabel then
-        Chrome.SetFont(bottomBar.searchLabel, 11, Chrome.CREAM, 54, "RIGHT")
-        Chrome.ClearAndPoint(bottomBar.searchLabel, "RIGHT", treeSearchBox or bottomBar,
-            treeSearchBox and "LEFT" or "RIGHT", treeSearchBox and -8 or -252, 0)
+        bottomBar.searchLabel:SetText("")
+        if bottomBar.searchLabel.Hide then
+            bottomBar.searchLabel:Hide()
+        end
     end
 
     if bottomBar.levelRestrictionFrame then
@@ -2684,17 +2886,16 @@ local function CreateBottomBar()
 
     if not treeSearchBox then
         local treeSearchLabel = bottomBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        treeSearchLabel:SetPoint("RIGHT", revertBtn, "LEFT", -155, 0)
-        treeSearchLabel:SetText("Search:")
+        treeSearchLabel:SetText("")
+        treeSearchLabel:Hide()
         bottomBar.searchLabel = treeSearchLabel
 
         treeSearchBox = CreateFrame("EditBox", "peeOwnedSkillTreeSearchBox", bottomBar, "InputBoxTemplate")
-        treeSearchBox:SetSize(140, 22)
-        treeSearchBox:SetPoint("LEFT", treeSearchLabel, "RIGHT", 8, 0)
+        treeSearchBox:SetSize(Chrome.STATUS_SEARCH_WIDTH, 24)
         treeSearchBox:SetAutoFocus(false)
         treeSearchBox:SetMaxLetters(50)
         treeSearchBox:SetFrameLevel(bottomBar:GetFrameLevel() + 5)
-        treeSearchBox:SetTextInsets(0, 16, 0, 0)
+        treeSearchBox:SetTextInsets(8, 18, 0, 0)
 
         local clearBtn = CreateFrame("Button", nil, treeSearchBox)
         clearBtn:SetSize(14, 14)
@@ -5215,6 +5416,72 @@ local function HideServerSkillTreeFrame()
     if serverFrame and serverFrame ~= peeOwnedSkillTreeFrame and serverFrame.Hide then
         serverFrame:Hide()
     end
+end
+
+local function RefreshAsheProgressSimulation()
+    local topBar = peeOwnedSkillTreeFrame and peeOwnedSkillTreeFrame.peeSkillTreeTopBar
+    if not topBar and Chrome.EnsureOwnedSkillTreeTopBar then
+        topBar = Chrome.EnsureOwnedSkillTreeTopBar()
+    end
+    if topBar and Chrome.WriteOwnedTopBarProgress then
+        Chrome.WriteOwnedTopBarProgress(topBar)
+    end
+
+    local _, _, ratio = GetAsheProgressSimulationValue()
+    if ratio and ratio >= 1 and asheProgressSimulation.frame then
+        asheProgressSimulation.frame:SetScript("OnUpdate", nil)
+        asheProgressSimulation.complete = true
+    end
+end
+
+overlay.StartAsheProgressSimulation = function()
+    if not peeOwnedSkillTreeFrame then
+        return false, "Soul Ashe Tree is not available yet."
+    end
+    local createFrame = _G and _G.CreateFrame
+    if not createFrame then
+        return false, "Soul Ashe progression test requires the WoW UI frame API."
+    end
+
+    if overlay.ShowOwnedSoulAsheTree then
+        overlay.ShowOwnedSoulAsheTree()
+    elseif peeOwnedSkillTreeFrame.Show then
+        HideServerSkillTreeFrame()
+        peeOwnedSkillTreeFrame:Show()
+    end
+
+    asheProgressSimulation.active = true
+    asheProgressSimulation.complete = false
+    asheProgressSimulation.duration = 10
+    local getTime = _G and _G.GetTime
+    asheProgressSimulation.startedAt = getTime and getTime() or 0
+    asheProgressSimulation.cap = GetOwnedAsheProgressCap()
+
+    if not asheProgressSimulation.frame then
+        asheProgressSimulation.frame = createFrame("Frame")
+    end
+    asheProgressSimulation.frame:SetScript("OnUpdate", RefreshAsheProgressSimulation)
+    RefreshAsheProgressSimulation()
+    DebugPrint("Soul Ashe progression test started. Cap: %d", asheProgressSimulation.cap)
+    return true, "Soul Ashe progression test started. It fills over 10 seconds. Use /pee ashe stop to restore real progress."
+end
+
+overlay.StopAsheProgressSimulation = function()
+    local wasActive = asheProgressSimulation.active
+    asheProgressSimulation.active = false
+    asheProgressSimulation.complete = false
+    asheProgressSimulation.startedAt = nil
+    if asheProgressSimulation.frame then
+        asheProgressSimulation.frame:SetScript("OnUpdate", nil)
+    end
+    if Chrome.RefreshOwnedSkillTreeTopBar then
+        Chrome.RefreshOwnedSkillTreeTopBar()
+    end
+    DebugPrint("Soul Ashe progression test stopped.")
+    if wasActive then
+        return true, "Soul Ashe progression test stopped. Real progress restored."
+    end
+    return true, "Soul Ashe progression test was not running."
 end
 
 overlay.UsesOwnedSoulAsheTree = function()

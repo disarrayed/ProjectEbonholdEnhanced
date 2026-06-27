@@ -189,6 +189,58 @@ local function HideRegion(region)
     end
 end
 
+local function GetRegionSearchToken(region)
+    if not region then
+        return ""
+    end
+
+    local name = region.GetName and region:GetName() or ""
+    local texture = region.GetTexture and region:GetTexture() or ""
+    return string.lower(tostring(name) .. " " .. tostring(texture))
+end
+
+local function IsSearchCursorRegion(region)
+    local token = GetRegionSearchToken(region)
+    return token:find("cursor", 1, true) ~= nil or token:find("caret", 1, true) ~= nil
+end
+
+local function IsSearchTemplateRegion(searchBox, region)
+    if not region or not region.SetTexture or IsSearchCursorRegion(region) then
+        return false
+    end
+
+    local token = GetRegionSearchToken(region)
+    if token == "" then
+        return false
+    end
+
+    if token:find("inputbox", 1, true) or token:find("editbox", 1, true) or
+        token:find("common-input", 1, true) then
+        return true
+    end
+
+    local searchName = searchBox and searchBox.GetName and searchBox:GetName()
+    local searchToken = searchName and string.lower(tostring(searchName)) or ""
+    if searchToken ~= "" and token:find(searchToken, 1, true) then
+        return token:find("left", 1, true) ~= nil or token:find("middle", 1, true) ~= nil or
+            token:find("mid", 1, true) ~= nil or token:find("right", 1, true) ~= nil
+    end
+
+    return false
+end
+
+local function HideSearchBoxTemplateArt(searchBox)
+    if not searchBox or not searchBox.GetRegions then
+        return
+    end
+
+    for _, region in ipairs({ searchBox:GetRegions() }) do
+        if IsSearchTemplateRegion(searchBox, region) then
+            HideRegion(region)
+        end
+    end
+end
+
 local function HideButtonArt(button)
     if not button then
         return
@@ -762,13 +814,7 @@ local function LayoutSkillTreeStatusBar(skillTreeFrame, bottomBar)
 
     local searchBox = _G.skillTreeSearchBox
     if searchBox then
-        if searchBox.GetRegions then
-            for _, region in ipairs({ searchBox:GetRegions() }) do
-                if region and region.SetTexture then
-                    HideRegion(region)
-                end
-            end
-        end
+        HideSearchBoxTemplateArt(searchBox)
         SetSize(searchBox, STATUS_SEARCH_WIDTH, 24)
         SetSearchBackdrop(searchBox)
         ClearAndPoint(searchBox, "RIGHT", bottomBar, "RIGHT", -46, 0)

@@ -47,29 +47,9 @@ local function ConfigureText(fontString, width)
     end
 end
 
-local function ClampNumber(value, minimum, maximum)
-    value = tonumber(value)
-    if not value then
-        return nil
-    end
-    if value < minimum then
-        return minimum
-    end
-    if value > maximum then
-        return maximum
-    end
-    return value
-end
-
 local function RefreshVisibleTheme()
     if overlay.RefreshVisibleTheme then
         overlay.RefreshVisibleTheme()
-    end
-end
-
-local function PrintMessage(message)
-    if overlay.PrintMessage then
-        overlay.PrintMessage(message)
     end
 end
 
@@ -277,73 +257,4 @@ function overlay.OpenOptionsPanel()
     elseif overlay.ShowStatusPanel then
         overlay.ShowStatusPanel()
     end
-end
-
-function overlay.HandleThemeCommand(action, value)
-    if action == "theme" then
-        PrintMessage(overlay.GetThemeSummary())
-        return true
-    end
-
-    if action == "opacity" then
-        local percent = ClampNumber(value, 70, 100)
-        if not percent then
-            PrintMessage("Usage: /pee opacity 70-100")
-            return true
-        end
-
-        overlay.SetSetting("backdropOpacity", percent / 100)
-        RefreshVisibleTheme()
-        overlay.ShowReloadPopup()
-        PrintMessage("Backdrop opacity set to " .. percent .. "%.")
-        return true
-    end
-
-    if action == "font" or action == "fontscale" then
-        local percent = ClampNumber(value, 50, 150)
-        if not percent then
-            PrintMessage("Usage: /pee font 50-150")
-            return true
-        end
-
-        overlay.SetSetting("fontScale", percent / 100)
-        RefreshVisibleTheme()
-        overlay.ShowReloadPopup()
-        PrintMessage("Font scale set to " .. percent .. "%.")
-        return true
-    end
-
-    if action == "perkscale" or action == "perkuiscale" then
-        local percent = ClampNumber(value, 50, 300)
-        if not percent then
-            PrintMessage("Usage: /pee perkscale 50-300")
-            return true
-        end
-
-        overlay.SetSetting("perkUIScale", percent / 100)
-        overlay.ApplyPerkUIScale()
-        if overlay.RefreshPerkChoiceTheme then
-            overlay.RefreshPerkChoiceTheme(true)
-        end
-        PrintMessage("Perk UI scale set to " .. percent .. "%.")
-        return true
-    end
-
-    if action == "transparent" then
-        if value == "on" or value == "1" or value == "true" then
-            overlay.SetSetting("transparentDesign", true)
-        elseif value == "off" or value == "0" or value == "false" then
-            overlay.SetSetting("transparentDesign", false)
-        else
-            PrintMessage("Usage: /pee transparent on or /pee transparent off")
-            return true
-        end
-
-        RefreshVisibleTheme()
-        overlay.ShowReloadPopup()
-        PrintMessage(overlay.GetThemeSummary() .. ".")
-        return true
-    end
-
-    return false
 end

@@ -96,10 +96,6 @@ local function EnsureSavedVariables()
         overlay.db.statusPanel = {}
     end
 
-    if type(overlay.db.launcher) ~= "table" then
-        overlay.db.launcher = {}
-    end
-
     if type(overlay.db.playerRunCompact) ~= "table" then
         overlay.db.playerRunCompact = {}
     end
@@ -807,13 +803,10 @@ local function UpdateStatusPanel()
     SetTextColor(panel.stateText, stateColor)
     panel.realmText:SetText("Realm: " .. realmName .. " (" .. realmType .. ")")
     panel.detailText:SetText(GetThemeSummary())
-    panel.hintText:SetText("Drag to move. Use /pee show or /pee hide.")
+    panel.hintText:SetText("Drag to move. Use /pee to toggle.")
 
     panel:SetBackdropColor(0.039, 0.039, 0.039, GetBackdropOpacity())
 
-    if overlay.launcherButton then
-        overlay.launcherButton:SetBackdropColor(0.039, 0.039, 0.039, GetBackdropOpacity())
-    end
 end
 
 local function CreateStatusPanel()
@@ -901,32 +894,20 @@ end
 
 overlay.ShowStatusPanel = ShowStatusPanel
 
-local function ShowLauncherButton()
-    if overlay.db and overlay.db.launcher then
-        overlay.db.launcher.hidden = true
-    end
-end
-
-local function HideLauncherButton()
-    if overlay.launcherButton then
-        overlay.launcherButton:Hide()
-    end
-
-    if overlay.db and overlay.db.launcher then
-        overlay.db.launcher.hidden = true
-    end
-end
-
-local function ToggleLauncherButton()
+local function ToggleStatusPanel()
     if not overlay.enabled then
         PrintMessage("Inactive on PTR.")
         return
     end
 
-    if overlay.launcherButton then
-        HideLauncherButton()
+    local panel = CreateStatusPanel()
+    UpdateStatusPanel()
+
+    if panel:IsShown() then
+        panel:Hide()
+    else
+        panel:Show()
     end
-    PrintMessage("The PEE launcher button has been removed. Use /pee to open the status panel.")
 end
 
 overlay.ShowReloadPopup = function()
@@ -960,10 +941,6 @@ end
 local function RefreshVisibleTheme()
     if overlay.statusPanel then
         UpdateStatusPanel()
-    end
-
-    if overlay.launcherButton then
-        overlay.launcherButton:SetBackdropColor(DARK[1], DARK[2], DARK[3], GetBackdropOpacity())
     end
 
     if overlay.ApplyPlayerRunTheme then
@@ -10771,142 +10748,16 @@ local function EnsureTalentProfileWatcher()
     overlay.talentProfileWatcher = watcher
 end
 
-local function SaveTalentProfileFromCommand(name)
-    if name == "" then
-        PrintTalentMessage("|cffff4444[Talents]|r Usage: /petal save <name>")
-        return
-    end
-
-    local key = TalentProfileKey(name)
-    local profileDB = GetTalentProfileDB()
-    local profile = CaptureCurrentTalents()
-    profile.displayName = name
-    profileDB[key] = profile
-    SetActiveTalentProfileKey(key)
-    RefreshTalentProfileDropdown()
-    PrintTalentMessage("|cff00ff00[Talents]|r Saved '" .. name .. "' (" ..
-        GetTalentProfileSummary(profile) .. ")")
-end
-
-local function ApplyTalentProfileFromCommand(name)
-    local activeKey = GetActiveTalentProfileKey()
-    if name ~= "" then
-        activeKey = TalentProfileKey(name)
-    end
-
-    if not activeKey then
-        PrintTalentMessage("|cffff4444[Talents]|r No profile selected. Use /petal save <name> first.")
-        return
-    end
-
-    local profileDB = GetTalentProfileDB()
-    local profile = profileDB[activeKey]
-    if not profile then
-        PrintTalentMessage("|cffff4444[Talents]|r Profile not found.")
-        return
-    end
-
-    PrintTalentMessage("|cfff0d440[Talents]|r Applying '" .. (profile.displayName or activeKey) .. "'...")
-    ApplyTalentProfile(profile, false)
-end
-
-local function DeleteTalentProfileFromCommand(name)
-    if name == "" then
-        PrintTalentMessage("|cffff4444[Talents]|r Usage: /petal delete <name>")
-        return
-    end
-
-    local key = TalentProfileKey(name)
-    local profileDB = GetTalentProfileDB()
-    local profile = profileDB[key]
-    if not profile then
-        PrintTalentMessage("|cffff4444[Talents]|r Profile '" .. name .. "' not found.")
-        return
-    end
-
-    profileDB[key] = nil
-    if GetActiveTalentProfileKey() == key then
-        SetActiveTalentProfileKey(nil)
-    end
-    RefreshTalentProfileDropdown()
-    PrintTalentMessage("|cffff4444[Talents]|r Deleted '" .. (profile.displayName or key) .. "'")
-end
-
-local function ListTalentProfiles()
-    local profileDB = GetTalentProfileDB()
-    local keys = GetSortedTalentProfileKeys()
-    local activeKey = GetActiveTalentProfileKey()
-
-    if #keys == 0 then
-        PrintTalentMessage("|cff888888[Talents]|r No saved profiles.")
-        return
-    end
-
-    PrintTalentMessage("|cfff0d440[Talents]|r Saved profiles:")
-    for _, key in ipairs(keys) do
-        local profile = profileDB[key]
-        local activeText = key == activeKey and " |cff00ff00<active>|r" or ""
-        PrintTalentMessage("  " .. (profile.displayName or key) .. " |cff888888(" ..
-            GetTalentProfileSummary(profile) .. ", L" .. (profile.savedLevel or "?") .. ")|r" .. activeText)
-    end
-end
-
 local function InstallTalentProfileHooks()
     if not overlay.enabled or overlay.isPTR then
         return
     end
 
     EnsureTalentProfileWatcher()
-
-    SLASH_PEETALENTPROFILE1 = "/petalent"
-    SLASH_PEETALENTPROFILE2 = "/petal"
-    SlashCmdList["PEETALENTPROFILE"] = function(message)
-        local command, rest = (message or ""):match("^(%S+)%s*(.*)")
-        command = (command or ""):lower()
-        rest = (rest or ""):gsub("^%s+", ""):gsub("%s+$", "")
-
-        if command == "save" then
-            SaveTalentProfileFromCommand(rest)
-        elseif command == "apply" then
-            ApplyTalentProfileFromCommand(rest)
-        elseif command == "delete" then
-            DeleteTalentProfileFromCommand(rest)
-        elseif command == "list" then
-            ListTalentProfiles()
-        else
-            PrintTalentMessage("|cfff0d440[Talents]|r Commands:")
-            PrintTalentMessage("  /petal save <name> - save current talents")
-            PrintTalentMessage("  /petal apply [name] - apply active or named profile")
-            PrintTalentMessage("  /petal delete <name> - delete a profile")
-            PrintTalentMessage("  /petal list - show all profiles")
-        end
-    end
-
     RefreshTalentProfileOverlay()
 end
 
 overlay.InstallTalentProfileHooks = InstallTalentProfileHooks
-
-overlay.PrintObjectiveDebug = function()
-    PrintMessage("--- Objective Debug ---")
-
-    local project = _G and _G.ProjectEbonhold
-    local objective = project and project.ObjectivesService and
-        project.ObjectivesService.GetActiveObjective and project.ObjectivesService.GetActiveObjective()
-    if objective then
-        PrintMessage("Stored objective: " .. tostring(objective.title or "none"))
-    else
-        PrintMessage("Stored objective: none")
-    end
-
-    local tracker = project and project.ObjectivesUI and project.ObjectivesUI.GetTrackerFrame and
-        project.ObjectivesUI.GetTrackerFrame()
-    if tracker and tracker.bonusSpellId then
-        local getSpellInfo = _G and _G.GetSpellInfo
-        local spellName = getSpellInfo and getSpellInfo(tracker.bonusSpellId) or nil
-        PrintMessage("Tracker showing: " .. tostring(spellName) .. " (ID: " .. tracker.bonusSpellId .. ")")
-    end
-end
 
 local function SetOverlayState()
     EnsureSavedVariables()
@@ -10918,9 +10769,6 @@ local function SetOverlayState()
     end
 
     if overlay.isPTR then
-        if overlay.launcherButton then
-            overlay.launcherButton:Hide()
-        end
         PrintMessage("Overlay inactive on PTR. Server ProjectEbonhold stays in control.")
         return
     end
@@ -10949,10 +10797,6 @@ local function SetOverlayState()
         overlay.ScheduleSkillTreePrewarm()
     end
 
-    if not overlay.db.launcher.hidden then
-        ShowLauncherButton()
-    end
-
     PrintMessage("Overlay loaded. Type /pee to open the status panel.")
 
     if not overlay.db.statusPanelSeen then
@@ -10968,7 +10812,6 @@ overlay.eventFrame:SetScript("OnEvent", SetOverlayState)
 SLASH_PROJECTEBONHOLDENHANCED1 = "/pee"
 SlashCmdList["PROJECTEBONHOLDENHANCED"] = function(message)
     local command = string.lower((message or ""):match("^%s*(.-)%s*$"))
-    local action, value = command:match("^(%S+)%s*(.-)%s*$")
 
     if overlay.isPTR then
         PrintMessage("Inactive on PTR.")
@@ -10991,113 +10834,41 @@ SlashCmdList["PROJECTEBONHOLDENHANCED"] = function(message)
         return
     end
 
-    if command == "objective" then
-        overlay.PrintObjectiveDebug()
-        return
-    end
-
-    if command == "affix" or command == "affixes" then
-        overlay.ShowAffixBook()
-        return
-    end
-
-    if command == "anvil" or command == "extraction" then
-        overlay.ShowExtractionFrame()
-        return
-    end
-
-    if overlay.HandleThemeCommand and overlay.HandleThemeCommand(action, value) then
-        return
-    end
-
-    if command == "show" then
-        ShowStatusPanel()
-        return
-    end
-
-    if command == "hide" then
-        if overlay.statusPanel then
-            overlay.statusPanel:Hide()
+    if command == "ashe start" then
+        if overlay.StartAsheProgressSimulation then
+            local _, resultMessage = overlay.StartAsheProgressSimulation()
+            PrintMessage(resultMessage or "Soul Ashe progression test started.")
+        else
+            PrintMessage("Soul Ashe progression test is not available yet.")
         end
         return
     end
 
-    if command == "button" or command == "launcher" then
-        ToggleLauncherButton()
+    if command == "ashe stop" then
+        if overlay.StopAsheProgressSimulation then
+            local _, resultMessage = overlay.StopAsheProgressSimulation()
+            PrintMessage(resultMessage or "Soul Ashe progression test stopped.")
+        else
+            PrintMessage("Soul Ashe progression test is not available yet.")
+        end
         return
     end
 
-    if command == "streedump" then
-        local ok, err = pcall(function()
-            local function P(s) PrintMessage(s) end
-            local pe = _G and _G.ProjectEbonhold
-            local stree = pe and pe.SkillTree
-            P("|cffFFD700== PEE skill tree runtime dump ==|r")
-            P("ProjectEbonhold=" .. tostring(pe ~= nil)
-                .. " SkillTree=" .. tostring(stree ~= nil)
-                .. " FitAndCenterTree=" .. type(stree and stree.FitAndCenterTree))
-            local frame = _G and _G.skillTreeFrame
-            local scroll = _G and _G.skillTreeScroll
-            local canvas = _G and _G.skillTreeCanvas
-            P("frame=" .. tostring(frame ~= nil) .. " scroll=" .. tostring(scroll ~= nil)
-                .. " canvas=" .. tostring(canvas ~= nil))
-            if frame then
-                P(string.format("frame %.0fx%.0f shown=%s moveReady=%s fitHooks=%s",
-                    frame:GetWidth() or 0, frame:GetHeight() or 0, tostring(frame:IsShown()),
-                    tostring(frame._peeMoveResizeReady), tostring(frame._peeFitAndCenterHooks)))
-            end
-            if scroll then
-                P(string.format("scroll %.0fx%.0f hS=%.0f vS=%.0f hRange=%.0f vRange=%.0f",
-                    scroll:GetWidth() or 0, scroll:GetHeight() or 0,
-                    (scroll.GetHorizontalScroll and scroll:GetHorizontalScroll()) or 0,
-                    (scroll.GetVerticalScroll and scroll:GetVerticalScroll()) or 0,
-                    (scroll.GetHorizontalScrollRange and scroll:GetHorizontalScrollRange()) or 0,
-                    (scroll.GetVerticalScrollRange and scroll:GetVerticalScrollRange()) or 0))
-                local wheel = scroll.GetScript and scroll:GetScript("OnMouseWheel")
-                P("wheel is PEE wrapper=" ..
-                    tostring(wheel ~= nil and wheel == scroll._peeSkillTreeWheelCullingWrapper))
-            end
-            if canvas then
-                P(string.format("canvas %.0fx%.0f scale=%.3f peeBaseW=%s",
-                    canvas:GetWidth() or 0, canvas:GetHeight() or 0,
-                    (canvas.GetScale and canvas:GetScale()) or 1, tostring(canvas._peeBaseWidth)))
-                local kids = canvas.GetChildren and { canvas:GetChildren() } or {}
-                local withId = 0
-                for _, c in ipairs(kids) do if c and c.id then withId = withId + 1 end end
-                P(string.format("canvas children=%d withId(nodes)=%d", #kids, withId))
-                local regions = canvas.GetRegions and { canvas:GetRegions() } or {}
-                local tally = {}
-                for _, r in ipairs(regions) do
-                    local t = (r.GetTexture and r:GetTexture()) or "nil"
-                    tally[t] = (tally[t] or 0) + 1
-                end
-                P("canvas regions by texture:")
-                for t, n in pairs(tally) do P(string.format("  %dx %s", n, tostring(t))) end
-            end
-            if overlay.GetSkillTreeNodeButtons then
-                P("GetSkillTreeNodeButtons=" .. tostring(#overlay.GetSkillTreeNodeButtons()))
-            end
-            if overlay.GetSkillTreeVisibleBounds then
-                local a, b, c, d = overlay.GetSkillTreeVisibleBounds()
-                P(string.format("PEE bounds minX=%s maxX=%s minY=%s maxY=%s",
-                    tostring(a), tostring(b), tostring(c), tostring(d)))
-            end
-        end)
-        if not ok then PrintMessage("streedump error: " .. tostring(err)) end
+    if command == "ashe" then
+        PrintMessage("Use /pee ashe start or /pee ashe stop.")
         return
     end
 
     if command ~= "" then
-        PrintMessage("Commands: /pee, /pee show, /pee hide, /pee version,")
-        PrintMessage("/pee anvil, /pee affix, /pee notice, /pee theme, /pee streedump")
+        PrintMessage("Commands: /pee, /pee version, /pee notice, /pee ashe start, /pee ashe stop")
+        PrintMessage("Use /affix for the Affix Book and /anvil for the Enchanted Anvil.")
         return
     end
 
-    ShowStatusPanel()
+    ToggleStatusPanel()
 end
 
 SLASH_PROJECTEBONHOLDENHANCEDAFFIX1 = "/affix"
-SLASH_PROJECTEBONHOLDENHANCEDAFFIX2 = "/affixes"
 SlashCmdList["PROJECTEBONHOLDENHANCEDAFFIX"] = function()
     if overlay.isPTR then
         PrintMessage("Inactive on PTR.")
@@ -11106,8 +10877,7 @@ SlashCmdList["PROJECTEBONHOLDENHANCEDAFFIX"] = function()
     overlay.ShowAffixBook()
 end
 
-SLASH_PROJECTEBONHOLDENHANCEDEXTRACTION1 = "/extraction"
-SLASH_PROJECTEBONHOLDENHANCEDEXTRACTION2 = "/anvil"
+SLASH_PROJECTEBONHOLDENHANCEDEXTRACTION1 = "/anvil"
 SlashCmdList["PROJECTEBONHOLDENHANCEDEXTRACTION"] = function()
     if overlay.isPTR then
         PrintMessage("Inactive on PTR.")

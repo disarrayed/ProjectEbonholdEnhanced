@@ -91,7 +91,6 @@ local function ClearOverlayState()
         perkUIScale = 1.0,
     }
     ProjectEbonholdEnhancedDB.statusPanel = {}
-    ProjectEbonholdEnhancedDB.launcher = { hidden = true }
     ProjectEbonholdEnhancedDB.playerRunCompact = {}
     ProjectEbonholdEnhancedDB.playerRunFrame = {}
     ProjectEbonholdEnhancedDB.empowermentFrame = {}
