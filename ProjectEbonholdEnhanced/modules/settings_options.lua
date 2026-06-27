@@ -345,10 +345,5 @@ function overlay.HandleThemeCommand(action, value)
         return true
     end
 
-    if action == "options" then
-        overlay.OpenOptionsPanel()
-        return true
-    end
-
     return false
 end

@@ -780,25 +780,6 @@ local function SavePanelPosition(panel)
     overlay.db.statusPanel.y = yOffset
 end
 
-local function RestoreLauncherPosition(button)
-    local position = overlay.db and overlay.db.launcher
-
-    button:ClearAllPoints()
-    if position and position.point then
-        button:SetPoint(
-            position.point,
-            UIParent,
-            position.relativePoint or position.point,
-            position.x or 0,
-            position.y or 0
-        )
-    elseif Minimap then
-        button:SetPoint("TOPRIGHT", Minimap, "TOPRIGHT", 4, 4)
-    else
-        button:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -90, -120)
-    end
-end
-
 local function GetStatusSummary()
     local realmName = "Unknown"
     if GetRealmName then
@@ -826,7 +807,7 @@ local function UpdateStatusPanel()
     SetTextColor(panel.stateText, stateColor)
     panel.realmText:SetText("Realm: " .. realmName .. " (" .. realmType .. ")")
     panel.detailText:SetText(GetThemeSummary())
-    panel.hintText:SetText("Drag to move. Use /pee to toggle. /pee reset resets positions.")
+    panel.hintText:SetText("Drag to move. Use /pee show or /pee hide.")
 
     panel:SetBackdropColor(0.039, 0.039, 0.039, GetBackdropOpacity())
 
@@ -920,22 +901,6 @@ end
 
 overlay.ShowStatusPanel = ShowStatusPanel
 
-local function ToggleStatusPanel()
-    if not overlay.enabled then
-        PrintMessage("Inactive on PTR.")
-        return
-    end
-
-    local panel = CreateStatusPanel()
-    UpdateStatusPanel()
-
-    if panel:IsShown() then
-        panel:Hide()
-    else
-        panel:Show()
-    end
-end
-
 local function ShowLauncherButton()
     if overlay.db and overlay.db.launcher then
         overlay.db.launcher.hidden = true
@@ -962,32 +927,6 @@ local function ToggleLauncherButton()
         HideLauncherButton()
     end
     PrintMessage("The PEE launcher button has been removed. Use /pee to open the status panel.")
-end
-
-local function ResetPositions()
-    if not overlay.db then
-        return
-    end
-
-    overlay.db.statusPanel = {}
-    overlay.db.launcher = {}
-    overlay.db.perkButtons = {}
-    overlay.db.perkButtonLayoutVersion = overlay.perkButtonLayoutVersion
-
-    if overlay.statusPanel then
-        RestorePanelPosition(overlay.statusPanel)
-    end
-
-    if overlay.launcherButton then
-        RestoreLauncherPosition(overlay.launcherButton)
-    end
-
-    if overlay.ApplyPerkChoiceTheme then
-        overlay.ApplyPerkChoiceTheme()
-    end
-
-    ShowStatusPanel()
-    PrintMessage("Window positions reset.")
 end
 
 overlay.ShowReloadPopup = function()
@@ -11089,11 +11028,6 @@ SlashCmdList["PROJECTEBONHOLDENHANCED"] = function(message)
         return
     end
 
-    if command == "reset" then
-        ResetPositions()
-        return
-    end
-
     if command == "streedump" then
         local ok, err = pcall(function()
             local function P(s) PrintMessage(s) end
@@ -11156,11 +11090,11 @@ SlashCmdList["PROJECTEBONHOLDENHANCED"] = function(message)
 
     if command ~= "" then
         PrintMessage("Commands: /pee, /pee show, /pee hide, /pee version,")
-        PrintMessage("/pee anvil, /pee affix, /pee notice, /pee reset, /pee theme, /pee options, /pee streedump")
+        PrintMessage("/pee anvil, /pee affix, /pee notice, /pee theme, /pee streedump")
         return
     end
 
-    ToggleStatusPanel()
+    ShowStatusPanel()
 end
 
 SLASH_PROJECTEBONHOLDENHANCEDAFFIX1 = "/affix"

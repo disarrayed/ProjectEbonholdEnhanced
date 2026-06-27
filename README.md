@@ -4,9 +4,9 @@
 
 Overlay addon for Project Ebonhold. Keeps the server addon in place and adds a cleaner UI layer for Echoes, Affixes, Soul Ashe, and related windows.
 
-[![Downloads](https://img.shields.io/github/downloads/disarrayed/ProjectEbonholdEnhanced/total?style=for-the-badge&label=downloads&color=b048f8)](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases)
-![Project Ebonhold Enhanced 0.1.60](https://img.shields.io/badge/Enhanced-0.1.60-4b2e83.svg?style=for-the-badge)
-![Project Ebonhold 3.3.5a](https://img.shields.io/badge/Project%20Ebonhold-3.3.5a-e6cc80.svg?style=for-the-badge)
+[![Downloads](https://img.shields.io/github/downloads/disarrayed/ProjectEbonholdEnhanced/total?style=for-the-badge&label=Downloads&color=69ccf0)](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases)
+![Project Ebonhold Enhanced 0.1.60](https://img.shields.io/badge/Project%20Ebonhold%20Enhanced-0.1.60-69ccf0.svg?style=for-the-badge)
+![Project Ebonhold 3.3.5a](https://img.shields.io/badge/Project%20Ebonhold-3.3.5a-69ccf0.svg?style=for-the-badge)
 
 [**Download**](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases/latest) | [**Source**](https://github.com/disarrayed/ProjectEbonholdEnhanced)
 
@@ -27,10 +27,10 @@ Overlay addon for Project Ebonhold. Keeps the server addon in place and adds a c
 
 1. Download the latest zip from [Releases](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases)
 2. Extract to `WoW\Interface\AddOns`
-3. Keep both folders installed:
-   - `ProjectEbonhold`
-   - `ProjectEbonholdEnhanced`
+3. The extracted folder should be named `ProjectEbonholdEnhanced`
 4. Fully restart WoW.
+
+The server `ProjectEbonhold` addon comes from the MPQ. You do not need a `ProjectEbonhold` folder for this overlay.
 
 ---
 
@@ -38,13 +38,11 @@ Overlay addon for Project Ebonhold. Keeps the server addon in place and adds a c
 
 | Command | What it does |
 | --- | --- |
-| `/pee` | Toggle the Project Ebonhold Enhanced panel |
+| `/pee` | Open the Project Ebonhold Enhanced panel |
 | `/pe` | Short alias for `/pee` |
 | `/pee show` | Show the Enhanced panel |
 | `/pee hide` | Hide the Enhanced panel |
-| `/pee options` | Open the Interface options page |
 | `/pee version` | Print the installed Enhanced version |
-| `/pee reset` | Reset Enhanced window positions and UI settings |
 | `/pee theme` | Print the current theme settings |
 | `/pee opacity 70-100` | Set transparent window opacity |
 | `/pee font 50-150` | Set Enhanced UI font scale |
@@ -78,9 +76,8 @@ Overlay addon for Project Ebonhold. Keeps the server addon in place and adds a c
 ## How to use
 
 - Start with `/pee` for the main Enhanced panel.
-- Use `/pee options` for normal settings. Use direct commands like `/pee opacity 80` only when you want a quick change.
+- Use direct commands like `/pee opacity 80` when you want a quick theme change.
 - Use `/anvil` when you want the Enchanted Anvil, and `/affix` when you only want the Affix Book.
-- Use `/pee reset` if windows end up off screen or the layout feels wrong.
 - Some visual changes ask for a reload. Use `/reload` when the addon tells you to.
 - On PTR, Enhanced disables itself so the server `ProjectEbonhold` addon stays in control.
 - Debug commands are only for troubleshooting when someone asks for that output.
