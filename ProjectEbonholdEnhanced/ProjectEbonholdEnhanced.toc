@@ -2,7 +2,7 @@
 ## Title: Project Ebonhold Enhanced
 ## Notes: Overlay addon for Project Ebonhold
 ## Author: disarrayed
-## Version: 0.1.60
+## Version: 0.1.61
 ## RequiredDeps: ProjectEbonhold
 ## SavedVariables: ProjectEbonholdEnhancedDB
 ## SavedVariablesPerCharacter: ProjectEbonholdEnhancedCharDB

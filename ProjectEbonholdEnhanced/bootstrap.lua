@@ -4,7 +4,7 @@ ProjectEbonholdEnhanced = ProjectEbonholdEnhanced or {}
 
 local overlay = ProjectEbonholdEnhanced
 overlay.name = addonName
-overlay.version = "0.1.60"
+overlay.version = "0.1.61"
 overlay.enabled = false
 overlay.isPTR = false
 
@@ -10966,7 +10966,6 @@ overlay.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 overlay.eventFrame:SetScript("OnEvent", SetOverlayState)
 
 SLASH_PROJECTEBONHOLDENHANCED1 = "/pee"
-SLASH_PROJECTEBONHOLDENHANCED2 = "/pe"
 SlashCmdList["PROJECTEBONHOLDENHANCED"] = function(message)
     local command = string.lower((message or ""):match("^%s*(.-)%s*$"))
     local action, value = command:match("^(%S+)%s*(.-)%s*$")

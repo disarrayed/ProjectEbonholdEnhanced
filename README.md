@@ -5,7 +5,7 @@
 Overlay addon for Project Ebonhold. Keeps the server addon in place and adds a cleaner UI layer for Echoes, Affixes, Soul Ashe, and related windows.
 
 [![Downloads](https://img.shields.io/github/downloads/disarrayed/ProjectEbonholdEnhanced/total?style=for-the-badge&label=Downloads&color=69ccf0)](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases)
-![Project Ebonhold Enhanced 0.1.60](https://img.shields.io/badge/Project%20Ebonhold%20Enhanced-0.1.60-69ccf0.svg?style=for-the-badge)
+![Project Ebonhold Enhanced 0.1.61](https://img.shields.io/badge/Project%20Ebonhold%20Enhanced-0.1.61-69ccf0.svg?style=for-the-badge)
 ![Project Ebonhold 3.3.5a](https://img.shields.io/badge/Project%20Ebonhold-3.3.5a-69ccf0.svg?style=for-the-badge)
 
 [**Download**](https://github.com/disarrayed/ProjectEbonholdEnhanced/releases/latest) | [**Source**](https://github.com/disarrayed/ProjectEbonholdEnhanced)
@@ -39,7 +39,6 @@ The server `ProjectEbonhold` addon comes from the MPQ. You do not need a `Projec
 | Command | What it does |
 | --- | --- |
 | `/pee` | Open the Project Ebonhold Enhanced panel |
-| `/pe` | Short alias for `/pee` |
 | `/pee show` | Show the Enhanced panel |
 | `/pee hide` | Hide the Enhanced panel |
 | `/pee version` | Print the installed Enhanced version |
