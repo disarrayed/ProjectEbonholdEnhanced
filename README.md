@@ -70,8 +70,9 @@ Theme and behavior settings live in the normal Interface Options panel.
 - Project Ebonhold Enhanced stores its own settings and positions.
 - Server-owned talents, action bars, PTR behavior, and gameplay systems stay
   with the server addon.
-- Server visual theme controls are ignored while Enhanced is enabled. Turning
-  off the server Transparent design option prompts you to disable Enhanced.
+- Server visual theme controls are ignored while Enhanced is enabled. Existing
+  server theme settings are normalized at startup, and turning off the server
+  Transparent design option prompts you to disable Enhanced.
 - Soul Ashe Tree search supports `missing` for unlearned nodes and `perm` or
   `permanent` for permanent nodes.
 - Release zips contain only the addon folder and player-facing release files.

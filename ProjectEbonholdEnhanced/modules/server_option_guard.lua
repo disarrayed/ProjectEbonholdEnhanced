@@ -14,6 +14,27 @@ local function GetOverlaySetting(key)
     return overlay.GetSetting and overlay.GetSetting(key) or nil
 end
 
+local function IsPTRRealm()
+    if overlay.isPTR then
+        return true
+    end
+
+    if not _G or not _G.GetRealmName then
+        return false
+    end
+
+    local realmName = _G.GetRealmName()
+    return realmName and realmName:find("PTR", 1, true) ~= nil
+end
+
+local function ShouldOverrideServerOptions()
+    if IsPTRRealm() then
+        return false
+    end
+
+    return overlay.enabled or overlay._peeServerOptionGuardPreload == true
+end
+
 local SERVER_OPTION_OVERRIDES = {
     noPerkFadeAnimations = function()
         return overlay.IsPerkFadeAnimationDisabled and overlay.IsPerkFadeAnimationDisabled() or true
@@ -82,6 +103,17 @@ local function RunAfterServerOptionHandler(callback)
     callback()
 end
 
+local function RunDelayedServerVisualRefresh(delay)
+    local timer = _G and _G.C_Timer
+    if timer and type(timer.After) == "function" then
+        timer.After(delay, function()
+            if ShouldOverrideServerOptions() then
+                overlay.NormalizeServerVisualOptions()
+            end
+        end)
+    end
+end
+
 local function RefreshServerVisualOptionControls()
     local frame = _G and _G.ProjectEbonholdOptionsPanel
     local service = _G and _G.ProjectEbonholdOptionsService
@@ -124,21 +156,38 @@ local function RefreshServerVisualOptionControls()
     end
 end
 
+function overlay.NormalizeServerVisualOptions()
+    if not ShouldOverrideServerOptions() then
+        return
+    end
+
+    if _G and _G.StaticPopup_Hide then
+        _G.StaticPopup_Hide(SERVER_RELOAD_POPUP)
+    end
+    RefreshServerVisualOptionControls()
+    if overlay.ApplyPerkUIScale then
+        overlay.ApplyPerkUIScale()
+    end
+    if overlay.RefreshPerkChoiceTheme then
+        overlay.RefreshPerkChoiceTheme(true)
+    end
+    if overlay.RefreshVisibleTheme then
+        overlay.RefreshVisibleTheme()
+    end
+end
+
 local function RefreshAfterServerVisualOptionAttempt()
     RunAfterServerOptionHandler(function()
-        if _G and _G.StaticPopup_Hide then
-            _G.StaticPopup_Hide(SERVER_RELOAD_POPUP)
-        end
-        RefreshServerVisualOptionControls()
-        if overlay.ApplyPerkUIScale then
-            overlay.ApplyPerkUIScale()
-        end
-        if overlay.RefreshPerkChoiceTheme then
-            overlay.RefreshPerkChoiceTheme(true)
-        end
-        if overlay.RefreshVisibleTheme then
-            overlay.RefreshVisibleTheme()
-        end
+        overlay.NormalizeServerVisualOptions()
+    end)
+
+    RunDelayedServerVisualRefresh(0.25)
+    RunDelayedServerVisualRefresh(1.0)
+end
+
+local function RefreshAfterServerTransparentDisablePrompt()
+    RunAfterServerOptionHandler(function()
+        overlay.NormalizeServerVisualOptions()
     end)
 end
 
@@ -164,7 +213,7 @@ end
 local function ShowServerTransparentDisablePrompt(originalSetSetting, service)
     if not _G or not _G.StaticPopupDialogs or not _G.StaticPopup_Show then
         PrintMessage("Disable Project Ebonhold Enhanced to turn off the server transparent theme option.")
-        RefreshAfterServerVisualOptionAttempt()
+        RefreshAfterServerTransparentDisablePrompt()
         return
     end
 
@@ -178,7 +227,7 @@ local function ShowServerTransparentDisablePrompt(originalSetSetting, service)
         OnAccept = function()
             DisableOverlayForServerTransparentTheme(originalSetSetting, service)
         end,
-        OnCancel = RefreshAfterServerVisualOptionAttempt,
+        OnCancel = RefreshAfterServerTransparentDisablePrompt,
         timeout = 0,
         whileDead = true,
         hideOnEscape = true,
@@ -196,7 +245,12 @@ end
 
 function overlay.InstallServerOptionReadOverrides()
     local service = _G and _G.ProjectEbonholdOptionsService
-    if not service or type(service.GetSetting) ~= "function" or service._peeOptionReadOverridesInstalled then
+    if not service or type(service.GetSetting) ~= "function" then
+        return
+    end
+
+    if service._peeOptionReadOverridesInstalled then
+        RefreshAfterServerVisualOptionAttempt()
         return
     end
 
@@ -204,7 +258,7 @@ function overlay.InstallServerOptionReadOverrides()
     service._peeOriginalGetSetting = originalGetSetting
     service.GetSetting = function(selfOrKey, maybeKey, ...)
         local key = type(selfOrKey) == "string" and selfOrKey or maybeKey
-        if overlay.enabled and not overlay.isPTR then
+        if ShouldOverrideServerOptions() then
             local value, found = GetServerOptionOverride(key)
             if found then
                 return value
@@ -226,7 +280,7 @@ function overlay.InstallServerOptionReadOverrides()
             local key = dotCall and selfOrKey or maybeKey
             local value = dotCall and maybeKey or maybeValue
 
-            if overlay.enabled and not overlay.isPTR and SERVER_VISUAL_OPTION_KEYS[key] then
+            if ShouldOverrideServerOptions() and SERVER_VISUAL_OPTION_KEYS[key] then
                 if key == "transparentDesign" and value == false then
                     ShowServerTransparentDisablePrompt(originalSetSetting, service)
                 else
@@ -244,4 +298,8 @@ function overlay.InstallServerOptionReadOverrides()
     end
 
     service._peeOptionReadOverridesInstalled = true
+    RefreshAfterServerVisualOptionAttempt()
 end
+
+overlay._peeServerOptionGuardPreload = true
+overlay.InstallServerOptionReadOverrides()
